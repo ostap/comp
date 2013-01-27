@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -69,6 +70,32 @@ func LoadFile(head Head, fileName string) ([]*Tuple, error) {
 	log.Printf("%d lines", lineNo)
 
 	return body, nil
+}
+
+func (r Body) Return(exprs []Expr) Body {
+	body := make(Body)
+	go func() {
+		for {
+			t := <-r
+			if t == nil {
+				break
+			}
+
+			buf := new(bytes.Buffer)
+			idx := make([]int, 0, len(exprs))
+			for _, e := range exprs {
+				val := e(gHead, t).Str()
+				pos, _ := buf.WriteString(val)
+				buf.WriteRune('\t')
+				idx = append(idx, pos+1)
+			}
+
+			body <- &Tuple{value: buf.String(), index: idx}
+		}
+		body <- nil
+	}()
+
+	return body
 }
 
 func (r Body) Select(expr Expr) Body {

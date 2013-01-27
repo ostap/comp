@@ -75,8 +75,10 @@ func (v *Value) Str() string {
 	switch v.kind {
 	case String:
 		return v.strval
-	case Number, Bool:
+	case Number:
 		return fmt.Sprintf("%v", v.numval)
+	case Bool:
+		return fmt.Sprintf("%v", v.boolval)
 	}
 
 	return ""
@@ -129,16 +131,16 @@ var gError bool
 %type <expr> relational_expression
 %type <expr> equality_expression
 %type <expr> expression
-%type <args> argument_expression_list
+%type <args> expression_list
 
 %%
 
 comprehension:
-								{ gComp = nil }
-    | '[' IDENT '|' IDENT TK_PROD IDENT ']'			{ gComp = Load($6) }
-    | '[' IDENT '|' IDENT TK_PROD IDENT ',' expression ']'	{ gComp = Load($6).Select($8) }
-    | '{' IDENT '|' IDENT TK_PROD IDENT '}'			{ gComp = Load($6) }
-    | '{' IDENT '|' IDENT TK_PROD IDENT ',' expression '}'	{ gComp = Load($6).Select($8) }
+	{ gComp = nil }
+    | '[' expression_list '|' IDENT TK_PROD IDENT ']'
+	{ gComp = Load($6).Return($2) }
+    | '[' expression_list '|' IDENT TK_PROD IDENT ',' expression ']'
+	{ gComp = Load($6).Select($8).Return($2) }
     ;
 
 primary_expression:
@@ -165,8 +167,9 @@ postfix_expression:
 	{ $$ = $1 }
     | IDENT
 	{
+		attr := $1
 		$$ = func(h Head, t *Tuple) *Value {
-			idx, ok := h[$1]
+			idx, ok := h[attr]
 			if ok {
 				return StrVal(t.Value(idx))
 			}
@@ -181,7 +184,7 @@ postfix_expression:
 			parseError("x unknown function %v", $1)
 		}
 	}
-    | IDENT '(' argument_expression_list ')'
+    | IDENT '(' expression_list ')'
 	{
 		switch $1 {
 		case "trunc":
@@ -195,7 +198,7 @@ postfix_expression:
 			}
 		case "dist":
 			if len($3) != 4 {
-				parseError("trunc takes only 4 arguments")
+				parseError("dist takes only 4 arguments")
 			}
 
 			lat1expr := $3[0]
@@ -216,9 +219,9 @@ postfix_expression:
 	}
     ;
 
-argument_expression_list:
-      expression				{ $$ = []Expr{$1} }
-    | argument_expression_list ',' expression	{ $$ = append($1, $3) }
+expression_list:
+      expression			{ $$ = []Expr{$1} }
+    | expression_list ',' expression	{ $$ = append($1, $3) }
     ;
 
 unary_expression:

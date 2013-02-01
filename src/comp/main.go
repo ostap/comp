@@ -56,7 +56,7 @@ func LoadFile(head Head, fileName string) ([]Tuple, error) {
 			break
 		}
 
-		tuple := strings.Split(line, "\t")
+		tuple := strings.Split(line[:len(line)-1], "\t")
 		if len(tuple) > len(head) {
 			tuple = tuple[:len(head)]
 		}

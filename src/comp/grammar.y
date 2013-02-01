@@ -213,6 +213,15 @@ postfix_expression:
 
 				return NumVal(Dist(lat1, lon1, lat2, lon2))
 			}
+		case "trim":
+			if len($3) != 1 {
+				parseError("trim takes only 1 argument")
+			}
+
+			expr := $3[0]
+			$$ = func(h Head, t Tuple) *Value {
+				return StrVal(strings.Trim(expr(h, t).Str(), " \t\n\r"))
+			}
 		default:
 			parseError("unknown function %v", $1)
 		}

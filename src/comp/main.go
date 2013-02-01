@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -11,17 +10,9 @@ import (
 	"time"
 )
 
-type Body chan *Tuple
+type Body chan Tuple
 type Head map[string]int
-
-type Tuple struct {
-	value string
-	index []int
-}
-
-func (t *Tuple) Value(pos int) string {
-	return t.value[t.index[pos]+1 : t.index[pos+1]]
-}
+type Tuple []string
 
 func ReadHead(fileName string) Head {
 	file, err := os.Open(fileName)
@@ -49,14 +40,14 @@ func ReadHead(fileName string) Head {
 	return res
 }
 
-func LoadFile(head Head, fileName string) ([]*Tuple, error) {
+func LoadFile(head Head, fileName string) ([]Tuple, error) {
 	log.Printf("loading file %v", fileName)
 	file, err := os.Open(fileName)
 	if err != nil {
 		return nil, err
 	}
 
-	body := make([]*Tuple, 0)
+	body := make([]Tuple, 0)
 	buf := bufio.NewReader(file)
 	lineNo := 0
 	for ; ; lineNo++ {
@@ -65,20 +56,16 @@ func LoadFile(head Head, fileName string) ([]*Tuple, error) {
 			break
 		}
 
-		index := make([]int, 0, len(head)+1)
-		index = append(index, -1)
-		for pos, ch := range line {
-			if ch == '\t' {
-				index = append(index, pos)
-			}
+		tuple := strings.Split(line, "\t")
+		if len(tuple) > len(head) {
+			tuple = tuple[:len(head)]
 		}
-		index = append(index, len(line)+1)
 
-		if len(index) == len(head)+1 {
-			body = append(body, &Tuple{value: line, index: index})
-		} else {
-			log.Printf("line %d: ignoring bad tuple", lineNo)
+		for len(tuple) < len(head) {
+			tuple = append(tuple, "")
 		}
+
+		body = append(body, tuple)
 
 		if lineNo%100000 == 0 {
 			log.Printf("line: %d", lineNo)
@@ -99,16 +86,12 @@ func (r Body) Return(exprs []Expr) Body {
 				break
 			}
 
-			buf := new(bytes.Buffer)
-			idx := make([]int, 0, len(exprs))
-			for _, e := range exprs {
-				val := e(gHead, t).Str()
-				pos, _ := buf.WriteString(val)
-				buf.WriteRune('\t')
-				idx = append(idx, pos+1)
+			tuple := make(Tuple, len(exprs))
+			for i, e := range exprs {
+				tuple[i] = e(gHead, t).Str()
 			}
 
-			body <- &Tuple{value: buf.String(), index: idx}
+			body <- tuple
 		}
 		body <- nil
 	}()
@@ -147,7 +130,7 @@ func Load(ident string) Body {
 	return body
 }
 
-var gBody []*Tuple
+var gBody []Tuple
 var gHead Head
 
 func main() {
@@ -184,7 +167,7 @@ func main() {
 		t := time.Now()
 		count := 0
 		for t := <-res; t != nil; t = <-res {
-			fmt.Printf("%v\n", t.value)
+			fmt.Printf("%v\n", t)
 			count++
 		}
 		fmt.Printf("--- %d results (%v)\n", count, time.Now().Sub(t))

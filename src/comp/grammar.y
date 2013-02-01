@@ -97,7 +97,7 @@ func (v *Value) Eq(arg *Value) bool {
 	return false
 }
 
-type Expr func(h Head, t *Tuple) *Value
+type Expr func(h Head, t Tuple) *Value
 
 var gComp Body
 var gError bool
@@ -147,14 +147,14 @@ primary_expression:
       STRING
 	{
 		val := StrVal($1)
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return val
 		}
 	}
     | NUMBER
 	{
 		val := NumVal($1)
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return val
 		}
 	}
@@ -168,10 +168,10 @@ postfix_expression:
     | IDENT
 	{
 		attr := $1
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			idx, ok := h[attr]
 			if ok {
-				return StrVal(t.Value(idx))
+				return StrVal(t[idx])
 			}
 
 			return BoolVal(false)
@@ -193,7 +193,7 @@ postfix_expression:
 			}
 
 			expr := $3[0]
-			$$ = func(h Head, t *Tuple) *Value {
+			$$ = func(h Head, t Tuple) *Value {
 				return NumVal(math.Trunc(expr(h, t).Num()))
 			}
 		case "dist":
@@ -205,7 +205,7 @@ postfix_expression:
 			lon1expr := $3[1]
 			lat2expr := $3[2]
 			lon2expr := $3[3]
-			$$ = func(h Head, t *Tuple) *Value {
+			$$ = func(h Head, t Tuple) *Value {
 				lat1 := lat1expr(h, t).Num()
 				lon1 := lon1expr(h, t).Num()
 				lat2 := lat2expr(h, t).Num()
@@ -230,21 +230,21 @@ unary_expression:
     | '!' postfix_expression
 	{
 		expr := $2
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return BoolVal(!expr(h, t).Bool())
 		}
 	}
     | '-' postfix_expression
 	{
 		expr := $2
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return NumVal(-expr(h, t).Num())
 		}
 	}
     | '+' postfix_expression
 	{
 		expr := $2
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return NumVal(+expr(h, t).Num())
 		}
 	}
@@ -257,7 +257,7 @@ multiplicative_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return NumVal(l(h, t).Num() * r(h, t).Num())
 		}
 	}
@@ -265,7 +265,7 @@ multiplicative_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return NumVal(l(h, t).Num() / r(h, t).Num())
 		}
 	}
@@ -278,7 +278,7 @@ additive_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return NumVal(l(h, t).Num() + r(h, t).Num())
 		}
 	}
@@ -286,7 +286,7 @@ additive_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return NumVal(l(h, t).Num() - r(h, t).Num())
 		}
 	}
@@ -294,7 +294,7 @@ additive_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return StrVal(l(h, t).Str() + r(h, t).Str())
 		}
 	}
@@ -307,7 +307,7 @@ relational_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return BoolVal(l(h, t).Num() < r(h, t).Num())
 		}
 	}
@@ -315,7 +315,7 @@ relational_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return BoolVal(l(h, t).Num() > r(h, t).Num())
 		}
 	}
@@ -323,7 +323,7 @@ relational_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return BoolVal(l(h, t).Num() <= r(h, t).Num())
 		}
 	}
@@ -331,7 +331,7 @@ relational_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return BoolVal(l(h, t).Num() >= r(h, t).Num())
 		}
 	}
@@ -344,7 +344,7 @@ equality_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return BoolVal(l(h, t).Eq(r(h, t)))
 		}
 	}
@@ -352,7 +352,7 @@ equality_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return BoolVal(!l(h, t).Eq(r(h, t)))
 		}
 	}
@@ -364,7 +364,7 @@ equality_expression:
 		}
 
 		expr := $1
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return BoolVal(re.MatchString(expr(h, t).Str()))
 		}
 	}
@@ -377,7 +377,7 @@ expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return BoolVal(l(h, t).Bool() && r(h, t).Bool())
 		}
 	}
@@ -385,7 +385,7 @@ expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t *Tuple) *Value {
+		$$ = func(h Head, t Tuple) *Value {
 			return BoolVal(l(h, t).Bool() || r(h, t).Bool())
 		}
 	}

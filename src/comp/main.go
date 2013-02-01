@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"runtime"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -22,9 +23,26 @@ func (t *Tuple) Value(pos int) string {
 	return t.value[t.index[pos]+1 : t.index[pos+1]]
 }
 
-func NewHead(attrs ...string) Head {
+func ReadHead(fileName string) Head {
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Fatalf("failed to read the header: %v", err)
+	}
+	defer file.Close()
+
+	buf := bufio.NewReader(file)
+	str, err := buf.ReadString('\n')
+	if err != nil {
+		log.Fatalf("failed to read the first line: %v", err)
+	}
+
+	re := regexp.MustCompile("^\\w+$")
 	res := make(Head)
-	for idx, attr := range attrs {
+	for idx, attr := range strings.Split(str, "\t") {
+		attr = strings.Trim(attr, " \r\n")
+		if !re.MatchString(attr) {
+			log.Fatalf("invalid attribute name: '%v'", attr)
+		}
 		res[attr] = idx
 	}
 
@@ -139,34 +157,15 @@ func main() {
 	}
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
-	log.Printf("running on %d core(s)", runtime.NumCPU())
+	// log.Printf("running on %d core(s)", runtime.NumCPU())
 	// log.Printf("adjusting runtime (old value %d)", runtime.GOMAXPROCS(runtime.NumCPU()))
 
-	gHead = NewHead(
-		"geonameid",
-		"name",
-		"asciiname",
-		"alternatenames",
-		"latitude",
-		"longitude",
-		"featureClass",
-		"featureCode",
-		"countryCode",
-		"cc2",
-		"admin1Code",
-		"admin2Code",
-		"admin3Code",
-		"admin4Code",
-		"population",
-		"elevation",
-		"dem",
-		"timezone",
-		"modificationDate")
+	gHead = ReadHead(os.Args[1])
 
 	var err error
 	gBody, err = LoadFile(gHead, os.Args[1])
 	if err != nil {
-		log.Fatalf("failed to load allCountries: %v", err)
+		log.Fatalf("failed to load file: %v", err)
 	}
 
 	stdin := bufio.NewReader(os.NewFile(0, "stdin"))

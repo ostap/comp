@@ -10,95 +10,10 @@ import (
 	"math"
 )
 
-const (
-	Bool   = iota
-	Number = iota
-	String = iota
-)
+type Expr func(t Tuple) *Value
 
-type Value struct {
-	strval  string
-	numval  float64
-	boolval bool
-	kind    int  // Bool, Number, String
-}
-
-func BoolVal(b bool) *Value {
-	return &Value{strval: "", numval: math.NaN(), boolval: b, kind: Bool}
-}
-
-func StrVal(s string) *Value {
-	return &Value{strval: s, numval: math.NaN(), boolval: false, kind: String}
-}
-
-func NumVal(n float64) *Value {
-	return &Value{strval: "", numval: n, boolval: false, kind: Number}
-}
-
-func (v *Value) Bool() bool {
-	switch v.kind {
-	case Bool:
-		return v.boolval
-	case Number:
-		if math.IsNaN(v.numval) {
-			return false
-		}
-
-		return v.numval != 0
-	case String:
-		return v.strval != ""
-	}
-
-	return false
-}
-
-func (v *Value) Num() float64 {
-	switch v.kind {
-	case Number:
-		return v.numval
-	case String:
-		res, _ := strconv.ParseFloat(v.strval, 64)
-		return res
-	case Bool:
-		res := 0.0
-		if v.boolval {
-			res = 1.0
-		}
-
-		return res
-	}
-
-	return math.NaN()
-}
-
-func (v *Value) Str() string {
-	switch v.kind {
-	case String:
-		return v.strval
-	case Number:
-		return fmt.Sprintf("%v", v.numval)
-	case Bool:
-		return fmt.Sprintf("%v", v.boolval)
-	}
-
-	return ""
-}
-
-// TODO: check reflexivity, symmetry, transitivity
-func (v *Value) Eq(arg *Value) bool {
-	if v.kind == Number || arg.kind == Number {
-		return v.Num() == arg.Num()
-	} else if v.kind == String || arg.kind == String {
-		return v.Str() == arg.Str()
-	} else if v.kind == Bool || arg.kind == Bool {
-		return v.Bool() == arg.Bool()
-	}
-
-	return false
-}
-
-type Expr func(h Head, t Tuple) *Value
-
+var gMem *Mem
+var gViews Views
 var gComp Body
 var gError bool
 %}
@@ -106,6 +21,7 @@ var gError bool
 %union {
 	str  string
 	num  float64
+	body Body
 	expr Expr
 	args []Expr
 }
@@ -123,6 +39,9 @@ var gError bool
 %token <num> NUMBER
 %token <str> IDENT
 %token <str> STRING
+
+%type <str>  identifier
+%type <body> generator
 %type <expr> primary_expression
 %type <expr> postfix_expression
 %type <expr> unary_expression
@@ -137,24 +56,37 @@ var gError bool
 
 comprehension:
 	{ gComp = nil }
-    | '[' expression_list '|' IDENT TK_PROD IDENT ']'
-	{ gComp = Load($6).Return($2) }
-    | '[' expression_list '|' IDENT TK_PROD IDENT ',' expression ']'
-	{ gComp = Load($6).Select($8).Return($2) }
+    | '[' expression_list '|' generator ']'
+	{ gComp = $4.Return($2) }
+    | '[' expression_list '|' generator ',' expression ']'
+	{ gComp = $4.Select($6).Return($2) }
+    ;
+
+generator:
+      IDENT TK_PROD IDENT
+	{
+		if !gViews.Has($3) {
+			parseError("unknown dataset %v", $3)
+		} else {
+			head, body := gViews.Load($3)
+			gMem.Decl($1, head)
+			$$ = body
+		}
+	}
     ;
 
 primary_expression:
       STRING
 	{
 		val := StrVal($1)
-		$$ = func(h Head, t Tuple) *Value {
+		$$ = func(t Tuple) *Value {
 			return val
 		}
 	}
     | NUMBER
 	{
 		val := NumVal($1)
-		$$ = func(h Head, t Tuple) *Value {
+		$$ = func(t Tuple) *Value {
 			return val
 		}
 	}
@@ -162,29 +94,29 @@ primary_expression:
 	{ $$ = $2 }
     ;
 
+identifier:
+      IDENT			{ $$ = $1 }
+    | identifier '.' IDENT	{ $$ = fmt.Sprintf("%v.%v", $1, $3) }
+    ;
+
 postfix_expression:
       primary_expression
 	{ $$ = $1 }
-    | IDENT
+    | identifier
 	{
-		attr := $1
-		$$ = func(h Head, t Tuple) *Value {
-			idx, ok := h[attr]
-			if ok {
-				return StrVal(t[idx])
-			}
-
-			return BoolVal(false)
+		pos := gMem.PosPtr($1)
+		$$ = func(t Tuple) *Value {
+			return StrVal(t[*pos])
 		}
 	}
-    | IDENT '(' ')'
+    | identifier '(' ')'
 	{
 		switch $1 {
 		default:
 			parseError("x unknown function %v", $1)
 		}
 	}
-    | IDENT '(' expression_list ')'
+    | identifier '(' expression_list ')'
 	{
 		switch $1 {
 		case "trunc":
@@ -193,8 +125,8 @@ postfix_expression:
 			}
 
 			expr := $3[0]
-			$$ = func(h Head, t Tuple) *Value {
-				return NumVal(math.Trunc(expr(h, t).Num()))
+			$$ = func(t Tuple) *Value {
+				return NumVal(math.Trunc(expr(t).Num()))
 			}
 		case "dist":
 			if len($3) != 4 {
@@ -205,11 +137,11 @@ postfix_expression:
 			lon1expr := $3[1]
 			lat2expr := $3[2]
 			lon2expr := $3[3]
-			$$ = func(h Head, t Tuple) *Value {
-				lat1 := lat1expr(h, t).Num()
-				lon1 := lon1expr(h, t).Num()
-				lat2 := lat2expr(h, t).Num()
-				lon2 := lon2expr(h, t).Num()
+			$$ = func(t Tuple) *Value {
+				lat1 := lat1expr(t).Num()
+				lon1 := lon1expr(t).Num()
+				lat2 := lat2expr(t).Num()
+				lon2 := lon2expr(t).Num()
 
 				return NumVal(Dist(lat1, lon1, lat2, lon2))
 			}
@@ -219,8 +151,8 @@ postfix_expression:
 			}
 
 			expr := $3[0]
-			$$ = func(h Head, t Tuple) *Value {
-				return StrVal(strings.Trim(expr(h, t).Str(), " \t\n\r"))
+			$$ = func(t Tuple) *Value {
+				return StrVal(strings.Trim(expr(t).Str(), " \t\n\r"))
 			}
 		default:
 			parseError("unknown function %v", $1)
@@ -239,22 +171,22 @@ unary_expression:
     | '!' postfix_expression
 	{
 		expr := $2
-		$$ = func(h Head, t Tuple) *Value {
-			return BoolVal(!expr(h, t).Bool())
+		$$ = func(t Tuple) *Value {
+			return BoolVal(!expr(t).Bool())
 		}
 	}
     | '-' postfix_expression
 	{
 		expr := $2
-		$$ = func(h Head, t Tuple) *Value {
-			return NumVal(-expr(h, t).Num())
+		$$ = func(t Tuple) *Value {
+			return NumVal(-expr(t).Num())
 		}
 	}
     | '+' postfix_expression
 	{
 		expr := $2
-		$$ = func(h Head, t Tuple) *Value {
-			return NumVal(+expr(h, t).Num())
+		$$ = func(t Tuple) *Value {
+			return NumVal(+expr(t).Num())
 		}
 	}
     ;
@@ -266,16 +198,16 @@ multiplicative_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return NumVal(l(h, t).Num() * r(h, t).Num())
+		$$ = func(t Tuple) *Value {
+			return NumVal(l(t).Num() * r(t).Num())
 		}
 	}
     | multiplicative_expression '/' unary_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return NumVal(l(h, t).Num() / r(h, t).Num())
+		$$ = func(t Tuple) *Value {
+			return NumVal(l(t).Num() / r(t).Num())
 		}
 	}
     ;
@@ -287,24 +219,24 @@ additive_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return NumVal(l(h, t).Num() + r(h, t).Num())
+		$$ = func(t Tuple) *Value {
+			return NumVal(l(t).Num() + r(t).Num())
 		}
 	}
     | additive_expression '-' multiplicative_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return NumVal(l(h, t).Num() - r(h, t).Num())
+		$$ = func(t Tuple) *Value {
+			return NumVal(l(t).Num() - r(t).Num())
 		}
 	}
     | additive_expression TK_CAT multiplicative_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return StrVal(l(h, t).Str() + r(h, t).Str())
+		$$ = func(t Tuple) *Value {
+			return StrVal(l(t).Str() + r(t).Str())
 		}
 	}
     ;
@@ -316,32 +248,32 @@ relational_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return BoolVal(l(h, t).Num() < r(h, t).Num())
+		$$ = func(t Tuple) *Value {
+			return BoolVal(l(t).Num() < r(t).Num())
 		}
 	}
     | relational_expression '>' additive_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return BoolVal(l(h, t).Num() > r(h, t).Num())
+		$$ = func(t Tuple) *Value {
+			return BoolVal(l(t).Num() > r(t).Num())
 		}
 	}
     | relational_expression TK_LTEQ additive_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return BoolVal(l(h, t).Num() <= r(h, t).Num())
+		$$ = func(t Tuple) *Value {
+			return BoolVal(l(t).Num() <= r(t).Num())
 		}
 	}
     | relational_expression TK_GTEQ additive_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return BoolVal(l(h, t).Num() >= r(h, t).Num())
+		$$ = func(t Tuple) *Value {
+			return BoolVal(l(t).Num() >= r(t).Num())
 		}
 	}
     ;
@@ -353,16 +285,16 @@ equality_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return BoolVal(l(h, t).Eq(r(h, t)))
+		$$ = func(t Tuple) *Value {
+			return BoolVal(l(t).Eq(r(t)))
 		}
 	}
     | equality_expression TK_NEQ relational_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return BoolVal(!l(h, t).Eq(r(h, t)))
+		$$ = func(t Tuple) *Value {
+			return BoolVal(!l(t).Eq(r(t)))
 		}
 	}
     | equality_expression TK_MATCH STRING
@@ -373,8 +305,8 @@ equality_expression:
 		}
 
 		expr := $1
-		$$ = func(h Head, t Tuple) *Value {
-			return BoolVal(re.MatchString(expr(h, t).Str()))
+		$$ = func(t Tuple) *Value {
+			return BoolVal(re.MatchString(expr(t).Str()))
 		}
 	}
     ;
@@ -386,16 +318,16 @@ expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return BoolVal(l(h, t).Bool() && r(h, t).Bool())
+		$$ = func(t Tuple) *Value {
+			return BoolVal(l(t).Bool() && r(t).Bool())
 		}
 	}
     | expression TK_OR equality_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(h Head, t Tuple) *Value {
-			return BoolVal(l(h, t).Bool() || r(h, t).Bool())
+		$$ = func(t Tuple) *Value {
+			return BoolVal(l(t).Bool() || r(t).Bool())
 		}
 	}
     ;
@@ -484,13 +416,20 @@ func (l *lexer) Error(s string) {
 	fmt.Printf("%+v - %v\n", l.scan.Pos(), s)
 }
 
-func Parse(query string) Body {
+func Parse(query string, views Views) Body {
 	gError = false
+	gViews = views
+	gMem = NewMem()
 
 	lex := &lexer{}
 	reader := strings.NewReader(query)
 	lex.scan.Init(reader)
 	comp_Parse(lex)
+
+	for _, attr := range gMem.BadAttrs() {
+		fmt.Printf("unknown identifier %v\n", attr)
+		gError = true
+	}
 
 	if gError {
 		return nil

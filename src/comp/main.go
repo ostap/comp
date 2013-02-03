@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -14,33 +15,37 @@ type Body chan Tuple
 type Head map[string]int
 type Tuple []string
 
-func ReadHead(fileName string) Head {
+func IsIdent(s string) bool {
+	ident, _ := regexp.MatchString("^\\w+$", s)
+	return ident
+}
+
+func ReadHead(fileName string) (Head, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		log.Fatalf("failed to read the header: %v", err)
+		return nil, err
 	}
 	defer file.Close()
 
 	buf := bufio.NewReader(file)
 	str, err := buf.ReadString('\n')
 	if err != nil {
-		log.Fatalf("failed to read the first line: %v", err)
+		return nil, err
 	}
 
-	re := regexp.MustCompile("^\\w+$")
 	res := make(Head)
 	for idx, attr := range strings.Split(str, "\t") {
 		attr = strings.Trim(attr, " \r\n")
-		if !re.MatchString(attr) {
-			log.Fatalf("invalid attribute name: '%v'", attr)
+		if !IsIdent(attr) {
+			return nil, fmt.Errorf("invalid attribute name: '%v'", attr)
 		}
 		res[attr] = idx
 	}
 
-	return res
+	return res, nil
 }
 
-func LoadFile(head Head, fileName string) ([]Tuple, error) {
+func ReadBody(head Head, fileName string) ([]Tuple, error) {
 	log.Printf("loading file %v", fileName)
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -54,6 +59,9 @@ func LoadFile(head Head, fileName string) ([]Tuple, error) {
 		line, _ := buf.ReadString('\n')
 		if len(line) == 0 {
 			break
+		}
+		if lineNo == 0 {
+			continue
 		}
 
 		tuple := strings.Split(line[:len(line)-1], "\t")
@@ -88,7 +96,7 @@ func (r Body) Return(exprs []Expr) Body {
 
 			tuple := make(Tuple, len(exprs))
 			for i, e := range exprs {
-				tuple[i] = e(gHead, t).Str()
+				tuple[i] = e(t).Str()
 			}
 
 			body <- tuple
@@ -108,7 +116,7 @@ func (r Body) Select(expr Expr) Body {
 				break
 			}
 
-			if expr(gHead, t).Bool() {
+			if expr(t).Bool() {
 				body <- t
 			}
 		}
@@ -118,24 +126,43 @@ func (r Body) Select(expr Expr) Body {
 	return body
 }
 
-func Load(ident string) Body {
+type Views struct {
+	heads  map[string]Head
+	bodies map[string][]Tuple
+}
+
+func NewViews() Views {
+	return Views{heads: make(map[string]Head), bodies: make(map[string][]Tuple)}
+}
+
+func (v Views) Store(name string, h Head, b []Tuple) {
+	v.heads[name] = h
+	v.bodies[name] = b
+}
+
+func (v Views) Has(name string) bool {
+	return v.heads[name] != nil && v.bodies[name] != nil
+}
+
+func (v Views) Load(name string) (Head, Body) {
+	if !v.Has(name) {
+		return nil, nil
+	}
+
 	body := make(Body)
 	go func() {
-		for i := 0; i < len(gBody); i++ {
-			body <- gBody[i]
+		for _, t := range v.bodies[name] {
+			body <- t
 		}
 		body <- nil
 	}()
 
-	return body
+	return v.heads[name], body
 }
 
-var gBody []Tuple
-var gHead Head
-
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Printf("usage: %v <file>\n", os.Args[0])
+	if len(os.Args) < 2 {
+		fmt.Printf("usage: %v file1.txt ... fileN.txt\n", os.Args[0])
 		return
 	}
 
@@ -143,12 +170,31 @@ func main() {
 	// log.Printf("running on %d core(s)", runtime.NumCPU())
 	// log.Printf("adjusting runtime (old value %d)", runtime.GOMAXPROCS(runtime.NumCPU()))
 
-	gHead = ReadHead(os.Args[1])
+	views := NewViews()
+	for _, fileName := range os.Args[1:] {
+		name := path.Base(fileName)
+		if dot := strings.Index(name, "."); dot > 0 {
+			name = name[:dot]
+		}
 
-	var err error
-	gBody, err = LoadFile(gHead, os.Args[1])
-	if err != nil {
-		log.Fatalf("failed to load file: %v", err)
+		if !IsIdent(name) {
+			log.Printf("invalid file name: '%v' cannot be used as an identifier (ignoring)", name)
+			continue
+		}
+
+		head, err := ReadHead(fileName)
+		if err != nil {
+			log.Printf("cannot load %v: %v", fileName, err)
+			continue
+		}
+
+		body, err := ReadBody(head, fileName)
+		if err != nil {
+			log.Printf("cannot load %v: %v", fileName, err)
+			continue
+		}
+
+		views.Store(name, head, body)
 	}
 
 	stdin := bufio.NewReader(os.NewFile(0, "stdin"))
@@ -159,7 +205,7 @@ func main() {
 			break
 		}
 
-		res := Parse(line)
+		res := Parse(line, views)
 		if res == nil {
 			continue
 		}

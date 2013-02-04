@@ -12,10 +12,11 @@ import (
 
 type Expr func(t Tuple) *Value
 
-var gMem *Mem
+var gMem   *Mem
 var gViews Views
-var gComp Body
-var gError bool
+var gComp  Body
+var gError error
+var gLex   *lexer
 %}
 
 %union {
@@ -335,9 +336,7 @@ expression:
 %%
 
 func parseError(s string, v ...interface{}) {
-	fmt.Printf(s, v...)
-	fmt.Printf("\n")
-	gError = true
+	gError = fmt.Errorf("%+v - %v", gLex.scan.Pos(), fmt.Sprintf(s, v...))
 }
 
 type lexer struct {
@@ -413,27 +412,25 @@ func (l *lexer) Lex(yylval *comp_SymType) int {
 }
 
 func (l *lexer) Error(s string) {
-	fmt.Printf("%+v - %v\n", l.scan.Pos(), s)
+	parseError(s)
 }
 
-func Parse(query string, views Views) Body {
-	gError = false
+func Parse(query string, views Views) (Body, error) {
+	gError = nil
 	gViews = views
 	gMem = NewMem()
+	gLex = &lexer{}
 
-	lex := &lexer{}
 	reader := strings.NewReader(query)
-	lex.scan.Init(reader)
-	comp_Parse(lex)
+	gLex.scan.Init(reader)
+	comp_Parse(gLex)
 
-	for _, attr := range gMem.BadAttrs() {
-		fmt.Printf("unknown identifier %v\n", attr)
-		gError = true
+	if gError == nil {
+		bad := gMem.BadAttrs()
+		if len(bad) > 0 {
+			gError = fmt.Errorf("unknown identifier(s): %v", bad)
+		}
 	}
 
-	if gError {
-		return nil
-	}
-
-	return gComp
+	return gComp, gError
 }

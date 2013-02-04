@@ -2,13 +2,14 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path"
 	"regexp"
 	"strings"
-	"time"
 )
 
 type Body chan Tuple
@@ -161,8 +162,12 @@ func (v Views) Load(name string) (Head, Body) {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Printf("usage: %v file1.txt ... fileN.txt\n", os.Args[0])
+	bind := flag.String("bind", "", "bind address, e.g. localhost:9090")
+	data := flag.String("data", "", "coma separated list of data files")
+	flag.Parse()
+
+	if *bind == "" || *data == "" {
+		fmt.Printf("usage: %v -bind localhost:9090 -data file1.txt,file2.txt\n", os.Args[0])
 		return
 	}
 
@@ -171,7 +176,7 @@ func main() {
 	// log.Printf("adjusting runtime (old value %d)", runtime.GOMAXPROCS(runtime.NumCPU()))
 
 	views := NewViews()
-	for _, fileName := range os.Args[1:] {
+	for _, fileName := range strings.Split(*data, ",") {
 		name := path.Base(fileName)
 		if dot := strings.Index(name, "."); dot > 0 {
 			name = name[:dot]
@@ -197,25 +202,6 @@ func main() {
 		views.Store(name, head, body)
 	}
 
-	stdin := bufio.NewReader(os.NewFile(0, "stdin"))
-	for {
-		fmt.Printf("> ")
-		line, _ := stdin.ReadString('\n')
-		if len(line) == 0 {
-			break
-		}
-
-		res := Parse(line, views)
-		if res == nil {
-			continue
-		}
-
-		t := time.Now()
-		count := 0
-		for t := <-res; t != nil; t = <-res {
-			fmt.Printf("%v\n", t)
-			count++
-		}
-		fmt.Printf("--- %d results (%v)\n", count, time.Now().Sub(t))
-	}
+	http.Handle("/", views)
+	http.ListenAndServe(*bind, nil)
 }

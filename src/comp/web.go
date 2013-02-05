@@ -1,9 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"path"
+	"runtime"
+	"runtime/pprof"
+	"strconv"
+	"strings"
 	"text/template"
 	"time"
 )
@@ -74,5 +82,70 @@ func (v Views) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := t.Execute(w, obj); err != nil {
 		webFail(w, "failed to execute template: %v", err)
 		return
+	}
+}
+
+type Profiler struct {
+}
+
+// See pprof_remote_servers.html bundled with the gperftools.
+func (p *Profiler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Printf("%v", r.URL)
+
+	switch r.URL.Path {
+	case "cmdline":
+		for _, arg := range os.Args {
+			fmt.Fprintf(w, "%v\n", arg)
+		}
+	case "profile":
+		sec := r.URL.Query()["seconds"]
+		if len(sec) > 0 {
+			dur, _ := strconv.Atoi(sec[0])
+			buf := new(bytes.Buffer)
+			pprof.StartCPUProfile(buf)
+			time.Sleep(time.Duration(dur) * time.Second)
+			pprof.StopCPUProfile()
+
+			buf.WriteTo(w)
+		} else {
+			webFail(w, "invalid profile request, expected seconds=XX")
+		}
+	case "symbol":
+		if r.Method == "GET" {
+			fmt.Fprintf(w, "num_symbols: 1")
+			return
+		}
+
+		buf, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			webFail(w, "failed to read request body: %v", err)
+			return
+		}
+
+		for _, strAddr := range strings.Split(string(buf), "+") {
+			strAddr = strings.Trim(strAddr, " \r\n\t")
+			desc := "unknownFunc"
+			addr, err := strconv.ParseUint(strAddr, 0, 64)
+			if err == nil {
+				fn := runtime.FuncForPC(uintptr(addr))
+				if fn != nil {
+					file, line := fn.FileLine(uintptr(addr))
+					desc = fmt.Sprintf("%v:%v:%v", path.Base(file), line, fn.Name())
+				}
+			}
+			fmt.Fprintf(w, "%v\t%v\n", strAddr, desc)
+		}
+	case "":
+		for _, p := range pprof.Profiles() {
+			fmt.Fprintf(w, "%v\n", p.Name())
+		}
+	default:
+		for _, p := range pprof.Profiles() {
+			if p.Name() == r.URL.Path {
+				p.WriteTo(w, 0)
+				return
+			}
+		}
+		webFail(w, "unknown profile: %v", r.URL.Path)
 	}
 }

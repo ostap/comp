@@ -203,5 +203,6 @@ func main() {
 	}
 
 	http.Handle("/", views)
+	http.Handle("/pprof/", http.StripPrefix("/pprof/", new(Profiler)))
 	http.ListenAndServe(*bind, nil)
 }

@@ -9,7 +9,10 @@ func min(a, b, c int) int {
 	return int(Min(m, float64(c)))
 }
 
-func dist(s, t string) int {
+func dist(left, right string) int {
+	s := []rune(left)
+	t := []rune(right)
+
 	/*
 	   LevenshteinDistance(char s[1..m], char t[1..n])
 	   for all i and j, d[i,j] will hold the Levenshtein distance between
@@ -49,12 +52,14 @@ func dist(s, t string) int {
 	return d[m-1][n-1]
 }
 
-func Fuzzy(s, t string) float64 {
-	d := float64(dist(s, t))
+func Fuzzy(left, right string) float64 {
+	d := float64(dist(left, right))
 	if d == 0 {
 		return 1
 	}
 
+	s := []rune(left)
+	t := []rune(right)
 	l := Max(float64(len(s)), float64(len(t)))
 	return (l - d) / l
 }

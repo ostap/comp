@@ -23,6 +23,10 @@ func TestFuzzy(t *testing.T) {
 		t.Errorf("failed (dist == %d)", d)
 	}
 
+	if d := dist("Zürich", "Zurich"); d != 1 {
+		t.Errorf("failed (dist == %d)", d)
+	}
+
 	if r := Fuzzy("", ""); r != 1 {
 		t.Errorf("failed (fuzzy == %v)", r)
 	}
@@ -44,6 +48,10 @@ func TestFuzzy(t *testing.T) {
 	}
 
 	if r := Fuzzy("Hello World!", "Hello wORLD?"); r != 0.5 {
+		t.Errorf("failed (fuzzy == %v)", r)
+	}
+
+	if r := Fuzzy("Zürich", "Zurich"); r != 0.8333333333333334 {
 		t.Errorf("failed (fuzzy == %v)", r)
 	}
 }

@@ -6,89 +6,83 @@ import (
 	"strconv"
 )
 
-const (
-	Bool   = iota
-	Number = iota
-	String = iota
-)
+type Value interface{}
 
-// TODO: replace Value with {}interface
-type Value struct {
-	strval  string
-	numval  float64
-	boolval bool
-	kind    int // Bool, Number, String
-}
-
-func BoolVal(b bool) *Value {
-	return &Value{strval: "", numval: math.NaN(), boolval: b, kind: Bool}
-}
-
-func StrVal(s string) *Value {
-	return &Value{strval: s, numval: math.NaN(), boolval: false, kind: String}
-}
-
-func NumVal(n float64) *Value {
-	return &Value{strval: "", numval: n, boolval: false, kind: Number}
-}
-
-func (v *Value) Bool() bool {
-	switch v.kind {
-	case Bool:
-		return v.boolval
-	case Number:
-		if math.IsNaN(v.numval) {
+func Bool(v Value) bool {
+	switch value := v.(type) {
+	case bool:
+		return value
+	case float64:
+		if math.IsNaN(value) {
 			return false
 		}
 
-		return v.numval != 0
-	case String:
-		return v.strval != ""
+		return value != 0
+	case string:
+		return value != ""
 	}
 
 	return false
 }
 
-func (v *Value) Num() float64 {
-	switch v.kind {
-	case Number:
-		return v.numval
-	case String:
-		res, _ := strconv.ParseFloat(v.strval, 64)
-		return res
-	case Bool:
+func Num(v Value) float64 {
+	switch value := v.(type) {
+	case bool:
 		res := 0.0
-		if v.boolval {
+		if value {
 			res = 1.0
 		}
 
+		return res
+	case float64:
+		return value
+	case string:
+		res, _ := strconv.ParseFloat(value, 64)
 		return res
 	}
 
 	return math.NaN()
 }
 
-func (v *Value) Str() string {
-	switch v.kind {
-	case String:
-		return v.strval
-	case Number:
-		return fmt.Sprintf("%v", v.numval)
-	case Bool:
-		return fmt.Sprintf("%v", v.boolval)
+func Str(v Value) string {
+	switch value := v.(type) {
+	case bool, float64:
+		return fmt.Sprintf("%v", value)
+	case string:
+		return value
 	}
 
 	return ""
 }
 
 // TODO: check reflexivity, symmetry, transitivity
-func (v *Value) Eq(arg *Value) bool {
-	if v.kind == Number || arg.kind == Number {
-		return v.Num() == arg.Num()
-	} else if v.kind == String || arg.kind == String {
-		return v.Str() == arg.Str()
-	} else if v.kind == Bool || arg.kind == Bool {
-		return v.Bool() == arg.Bool()
+func Eq(l, r Value) bool {
+	switch lv := l.(type) {
+	case bool:
+		switch rv := r.(type) {
+		case bool:
+			return lv == rv
+		case float64:
+			return Num(lv) == rv
+		case string:
+			return Str(lv) == rv
+		}
+	case float64:
+		switch rv := r.(type) {
+		case float64:
+			return lv == rv
+		case bool, string:
+			return lv == Num(rv)
+		}
+	case string:
+		switch rv := r.(type) {
+		case string:
+			return lv == rv
+		case bool:
+			return Bool(lv) == rv
+		case float64:
+			return Num(lv) == rv
+		}
 	}
 
 	return false

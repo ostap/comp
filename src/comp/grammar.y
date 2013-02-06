@@ -10,8 +10,6 @@ import (
 	"math"
 )
 
-type Expr func(t Tuple) *Value
-
 var gMem   *Mem
 var gViews Views
 var gComp  Body
@@ -79,15 +77,15 @@ generator:
 primary_expression:
       STRING
 	{
-		val := StrVal($1)
-		$$ = func(t Tuple) *Value {
+		val := Value($1)
+		$$ = func(t Tuple) Value {
 			return val
 		}
 	}
     | NUMBER
 	{
-		val := NumVal($1)
-		$$ = func(t Tuple) *Value {
+		val := Value($1)
+		$$ = func(t Tuple) Value {
 			return val
 		}
 	}
@@ -106,8 +104,8 @@ postfix_expression:
     | identifier
 	{
 		pos := gMem.PosPtr($1)
-		$$ = func(t Tuple) *Value {
-			return StrVal(t[*pos])
+		$$ = func(t Tuple) Value {
+			return t[*pos]
 		}
 	}
     | identifier '(' ')'
@@ -126,8 +124,8 @@ postfix_expression:
 			}
 
 			expr := $3[0]
-			$$ = func(t Tuple) *Value {
-				return NumVal(math.Trunc(expr(t).Num()))
+			$$ = func(t Tuple) Value {
+				return math.Trunc(Num(expr(t)))
 			}
 		case "dist":
 			if len($3) != 4 {
@@ -138,13 +136,13 @@ postfix_expression:
 			lon1expr := $3[1]
 			lat2expr := $3[2]
 			lon2expr := $3[3]
-			$$ = func(t Tuple) *Value {
-				lat1 := lat1expr(t).Num()
-				lon1 := lon1expr(t).Num()
-				lat2 := lat2expr(t).Num()
-				lon2 := lon2expr(t).Num()
+			$$ = func(t Tuple) Value {
+				lat1 := Num(lat1expr(t))
+				lon1 := Num(lon1expr(t))
+				lat2 := Num(lat2expr(t))
+				lon2 := Num(lon2expr(t))
 
-				return NumVal(Dist(lat1, lon1, lat2, lon2))
+				return Dist(lat1, lon1, lat2, lon2)
 			}
 		case "trim":
 			if len($3) != 1 {
@@ -152,8 +150,8 @@ postfix_expression:
 			}
 
 			expr := $3[0]
-			$$ = func(t Tuple) *Value {
-				return StrVal(strings.Trim(expr(t).Str(), " \t\n\r"))
+			$$ = func(t Tuple) Value {
+				return strings.Trim(Str(expr(t)), " \t\n\r")
 			}
 		case "lower":
 			if len($3) != 1 {
@@ -161,8 +159,8 @@ postfix_expression:
 			}
 
 			expr := $3[0]
-			$$ = func(t Tuple) *Value {
-				return StrVal(strings.ToLower(expr(t).Str()))
+			$$ = func(t Tuple) Value {
+				return strings.ToLower(Str(expr(t)))
 			}
 		case "upper":
 			if len($3) != 1 {
@@ -170,8 +168,8 @@ postfix_expression:
 			}
 
 			expr := $3[0]
-			$$ = func(t Tuple) *Value {
-				return StrVal(strings.ToUpper(expr(t).Str()))
+			$$ = func(t Tuple) Value {
+				return strings.ToUpper(Str(expr(t)))
 			}
 		case "fuzzy":
 			if len($3) != 2 {
@@ -180,8 +178,8 @@ postfix_expression:
 
 			se := $3[0]
 			te := $3[1]
-			$$ = func(t Tuple) *Value {
-				return NumVal(Fuzzy(se(t).Str(), te(t).Str()))
+			$$ = func(t Tuple) Value {
+				return Fuzzy(Str(se(t)), Str(te(t)))
 			}
 		default:
 			parseError("unknown function %v", $1)
@@ -200,22 +198,22 @@ unary_expression:
     | '!' postfix_expression
 	{
 		expr := $2
-		$$ = func(t Tuple) *Value {
-			return BoolVal(!expr(t).Bool())
+		$$ = func(t Tuple) Value {
+			return !Bool(expr(t))
 		}
 	}
     | '-' postfix_expression
 	{
 		expr := $2
-		$$ = func(t Tuple) *Value {
-			return NumVal(-expr(t).Num())
+		$$ = func(t Tuple) Value {
+			return -Num(expr(t))
 		}
 	}
     | '+' postfix_expression
 	{
 		expr := $2
-		$$ = func(t Tuple) *Value {
-			return NumVal(+expr(t).Num())
+		$$ = func(t Tuple) Value {
+			return +Num(expr(t))
 		}
 	}
     ;
@@ -227,16 +225,16 @@ multiplicative_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return NumVal(l(t).Num() * r(t).Num())
+		$$ = func(t Tuple) Value {
+			return Num(l(t)) * Num(r(t))
 		}
 	}
     | multiplicative_expression '/' unary_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return NumVal(l(t).Num() / r(t).Num())
+		$$ = func(t Tuple) Value {
+			return Num(l(t)) / Num(r(t))
 		}
 	}
     ;
@@ -248,24 +246,24 @@ additive_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return NumVal(l(t).Num() + r(t).Num())
+		$$ = func(t Tuple) Value {
+			return Num(l(t)) + Num(r(t))
 		}
 	}
     | additive_expression '-' multiplicative_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return NumVal(l(t).Num() - r(t).Num())
+		$$ = func(t Tuple) Value {
+			return Num(l(t)) - Num(r(t))
 		}
 	}
     | additive_expression TK_CAT multiplicative_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return StrVal(l(t).Str() + r(t).Str())
+		$$ = func(t Tuple) Value {
+			return Str(l(t)) + Str(r(t))
 		}
 	}
     ;
@@ -277,32 +275,32 @@ relational_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return BoolVal(l(t).Num() < r(t).Num())
+		$$ = func(t Tuple) Value {
+			return Num(l(t)) < Num(r(t))
 		}
 	}
     | relational_expression '>' additive_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return BoolVal(l(t).Num() > r(t).Num())
+		$$ = func(t Tuple) Value {
+			return Num(l(t)) > Num(r(t))
 		}
 	}
     | relational_expression TK_LTEQ additive_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return BoolVal(l(t).Num() <= r(t).Num())
+		$$ = func(t Tuple) Value {
+			return Num(l(t)) <= Num(r(t))
 		}
 	}
     | relational_expression TK_GTEQ additive_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return BoolVal(l(t).Num() >= r(t).Num())
+		$$ = func(t Tuple) Value {
+			return Num(l(t)) >= Num(r(t))
 		}
 	}
     ;
@@ -314,16 +312,16 @@ equality_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return BoolVal(l(t).Eq(r(t)))
+		$$ = func(t Tuple) Value {
+			return Eq(l(t), r(t))
 		}
 	}
     | equality_expression TK_NEQ relational_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return BoolVal(!l(t).Eq(r(t)))
+		$$ = func(t Tuple) Value {
+			return !Eq(l(t), r(t))
 		}
 	}
     | equality_expression TK_MATCH STRING
@@ -334,8 +332,8 @@ equality_expression:
 		}
 
 		expr := $1
-		$$ = func(t Tuple) *Value {
-			return BoolVal(re.MatchString(expr(t).Str()))
+		$$ = func(t Tuple) Value {
+			return re.MatchString(Str(expr(t)))
 		}
 	}
     ;
@@ -347,16 +345,16 @@ expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return BoolVal(l(t).Bool() && r(t).Bool())
+		$$ = func(t Tuple) Value {
+			return Bool(l(t)) && Bool(r(t))
 		}
 	}
     | expression TK_OR equality_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) *Value {
-			return BoolVal(l(t).Bool() || r(t).Bool())
+		$$ = func(t Tuple) Value {
+			return Bool(l(t)) || Bool(r(t))
 		}
 	}
     ;

@@ -15,6 +15,7 @@ import (
 type Body chan Tuple
 type Head map[string]int
 type Tuple []string
+type Expr func(t Tuple) Value
 
 func IsIdent(s string) bool {
 	ident, _ := regexp.MatchString("^\\w+$", s)
@@ -97,7 +98,7 @@ func (r Body) Return(exprs []Expr) Body {
 
 			tuple := make(Tuple, len(exprs))
 			for i, e := range exprs {
-				tuple[i] = e(t).Str()
+				tuple[i] = Str(e(t))
 			}
 
 			body <- tuple
@@ -117,7 +118,7 @@ func (r Body) Select(expr Expr) Body {
 				break
 			}
 
-			if expr(t).Bool() {
+			if Bool(expr(t)) {
 				body <- t
 			}
 		}

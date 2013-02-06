@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
+	"strings"
 )
 
 type Mem struct {
-	data   map[string]*Value
+	data   map[string]Value
 	posIdx map[string]int  // attribute positions (index in posVal)
 	posVal [1024]int       // the actual attribute positions
 	posOk  map[string]bool // status of attribute declarations
@@ -13,7 +14,7 @@ type Mem struct {
 
 func NewMem() *Mem {
 	return &Mem{
-		data:   make(map[string]*Value),
+		data:   make(map[string]Value),
 		posIdx: make(map[string]int),
 		posOk:  make(map[string]bool)}
 }
@@ -64,9 +65,21 @@ func (m *Mem) BadAttrs() []string {
 	return bad
 }
 
-func (m *Mem) Load(name string) *Value {
+func (m *Mem) Load(name string) Value {
+	idx, ok := m.posIdx[name]
+	if !ok {
+		return nil
+	}
+
+	cell := name[:strings.Index(name, ".")]
+	tuple, isTuple := m.data[cell].(Tuple)
+	if isTuple {
+		return tuple[m.posVal[idx]]
+	}
+
 	return nil
 }
 
-func (m Mem) Store(name string, value *Value) {
+func (m *Mem) Store(name string, value Value) {
+	m.data[name] = value
 }

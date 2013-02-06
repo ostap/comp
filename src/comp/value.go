@@ -20,6 +20,8 @@ func Bool(v Value) bool {
 		return value != 0
 	case string:
 		return value != ""
+	case Tuple:
+		return true
 	}
 
 	return false

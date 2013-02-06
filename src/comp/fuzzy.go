@@ -52,14 +52,19 @@ func dist(left, right string) int {
 	return d[m-1][n-1]
 }
 
-func Fuzzy(left, right string) float64 {
-	d := float64(dist(left, right))
-	if d == 0 {
-		return 1
+func Fuzzy(left string, right string, attr string) Value {
+	head, body := gViews.Load(right)
+
+	pos := head[attr]
+	resDist := MaxInt32
+	var resTuple Tuple
+	for t := <-body; t != nil; t = <-body {
+		d := dist(left, t[pos])
+		if d < resDist {
+			resDist = d
+			resTuple = t
+		}
 	}
 
-	s := []rune(left)
-	t := []rune(right)
-	l := Max(float64(len(s)), float64(len(t)))
-	return (l - d) / l
+	return resTuple
 }

@@ -48,6 +48,7 @@ var gLex   *lexer
 %type <expr> additive_expression
 %type <expr> relational_expression
 %type <expr> equality_expression
+%type <expr> logical_expression
 %type <expr> expression
 %type <args> expression_list
 
@@ -103,8 +104,13 @@ postfix_expression:
 	{ $$ = $1 }
     | identifier
 	{
+        ident := $1
+		memLoad := strings.HasPrefix($1, "m.")
 		pos := gMem.PosPtr($1)
 		$$ = func(t Tuple) Value {
+			if memLoad {
+                return gMem.Load(ident)
+			}
 			return t[*pos]
 		}
 	}
@@ -172,14 +178,18 @@ postfix_expression:
 				return strings.ToUpper(Str(expr(t)))
 			}
 		case "fuzzy":
-			if len($3) != 2 {
+			if len($3) != 3 {
 				parseError("fuzzy takes only 2 arguments")
 			}
 
 			se := $3[0]
-			te := $3[1]
+			te := Str($3[1](nil))
+			ne := $3[2]
+
+			head, _ := gViews.Load(te)
+			gMem.Decl("m", head)
 			$$ = func(t Tuple) Value {
-				return Fuzzy(Str(se(t)), Str(te(t)))
+				return Fuzzy(Str(se(t)), te, Str(ne(t)))
 			}
 		default:
 			parseError("unknown function %v", $1)
@@ -338,10 +348,11 @@ equality_expression:
 	}
     ;
 
-expression:
+
+logical_expression:
       equality_expression
 	{ $$ = $1 }
-    | expression TK_AND equality_expression
+    | logical_expression TK_AND equality_expression
 	{
 		l := $1
 		r := $3
@@ -349,12 +360,26 @@ expression:
 			return Bool(l(t)) && Bool(r(t))
 		}
 	}
-    | expression TK_OR equality_expression
+    | logical_expression TK_OR equality_expression
 	{
 		l := $1
 		r := $3
 		$$ = func(t Tuple) Value {
 			return Bool(l(t)) || Bool(r(t))
+		}
+	}
+    ;
+
+expression:
+      logical_expression	{ $$ = $1 }
+    | IDENT '=' expression
+	{
+		ident := $1
+		expr := $3
+		$$ = func(t Tuple) Value {
+			v := expr(t)
+			gMem.Store(ident, v)
+			return v
 		}
 	}
     ;

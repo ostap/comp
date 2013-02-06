@@ -132,6 +132,8 @@ type Views struct {
 	bodies map[string][]Tuple
 }
 
+type RawViews Views
+
 func NewViews() Views {
 	return Views{heads: make(map[string]Head), bodies: make(map[string][]Tuple)}
 }
@@ -203,6 +205,7 @@ func main() {
 	}
 
 	http.Handle("/", views)
+	http.Handle("/raw", RawViews(views))
 	http.Handle("/pprof/", http.StripPrefix("/pprof/", new(Profiler)))
 	http.ListenAndServe(*bind, nil)
 }

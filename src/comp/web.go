@@ -85,6 +85,33 @@ func (v Views) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (rv RawViews) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		if err := r.ParseForm(); err != nil {
+			webFail(w, "invalid form submission: %v", err)
+			return
+		}
+
+		query := r.Form.Get("query")
+		body, err := Parse(query, Views(rv))
+		if err != nil {
+			webFail(w, "failed to parse the query: %v", err)
+		}
+
+		for t := <-body; t != nil; t = <-body {
+			tab := ""
+			for _, v := range t {
+				fmt.Fprintf(w, "%v%v", tab, v)
+				tab = "\t"
+			}
+			fmt.Fprintf(w, "\n")
+		}
+	} else {
+		webFail(w, "unsupported method %v", r.Method)
+		return
+	}
+}
+
 type Profiler struct {
 }
 

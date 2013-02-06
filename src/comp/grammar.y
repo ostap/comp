@@ -155,6 +155,34 @@ postfix_expression:
 			$$ = func(t Tuple) *Value {
 				return StrVal(strings.Trim(expr(t).Str(), " \t\n\r"))
 			}
+		case "lower":
+			if len($3) != 1 {
+				parseError("lower takes only 1 argument")
+			}
+
+			expr := $3[0]
+			$$ = func(t Tuple) *Value {
+				return StrVal(strings.ToLower(expr(t).Str()))
+			}
+		case "upper":
+			if len($3) != 1 {
+				parseError("upper takes only 1 argument")
+			}
+
+			expr := $3[0]
+			$$ = func(t Tuple) *Value {
+				return StrVal(strings.ToUpper(expr(t).Str()))
+			}
+		case "fuzzy":
+			if len($3) != 2 {
+				parseError("fuzzy takes only 2 arguments")
+			}
+
+			se := $3[0]
+			te := $3[1]
+			$$ = func(t Tuple) *Value {
+				return NumVal(Fuzzy(se(t).Str(), te(t).Str()))
+			}
 		default:
 			parseError("unknown function %v", $1)
 		}

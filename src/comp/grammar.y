@@ -12,7 +12,7 @@ import (
 
 var gMem   *Mem
 var gViews Views
-var gComp  Body
+var gComp  *Comp
 var gError error
 var gLex   *lexer
 %}
@@ -20,7 +20,7 @@ var gLex   *lexer
 %union {
 	str  string
 	num  float64
-	body Body
+	comp *Comp
 	expr Expr
 	args []Expr
 }
@@ -40,7 +40,7 @@ var gLex   *lexer
 %token <str> STRING
 
 %type <str>  identifier
-%type <body> generator
+%type <comp> generator
 %type <expr> primary_expression
 %type <expr> postfix_expression
 %type <expr> unary_expression
@@ -64,12 +64,12 @@ comprehension:
 generator:
       IDENT TK_PROD IDENT
 	{
-		if !gViews.Has($3) {
+		if !gViews.IsDef($3) {
 			parseError("unknown dataset %v", $3)
 		} else {
-			head, body := gViews.Load($3)
+			head := gViews.Head($3)
 			gMem.Decl($1, head)
-			$$ = body
+			$$ = Load($3)
 		}
 	}
     ;
@@ -441,7 +441,7 @@ func (l *lexer) Error(s string) {
 	parseError(s)
 }
 
-func Parse(query string, views Views) (Body, error) {
+func Parse(query string, views Views) (*Comp, error) {
 	gError = nil
 	gViews = views
 	gMem = NewMem()

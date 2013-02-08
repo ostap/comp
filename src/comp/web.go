@@ -66,12 +66,12 @@ func (v Views) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		obj.Query = r.Form.Get("query")
-		body, err := Parse(obj.Query, v)
+		comp, err := Parse(obj.Query, v)
 		if err != nil {
 			obj.Error = err
 		} else {
 			t := time.Now()
-			for t := <-body; t != nil; t = <-body {
+			for t := range comp.Run(v) {
 				obj.Body = append(obj.Body, t)
 			}
 			obj.Time = time.Now().Sub(t)
@@ -93,12 +93,12 @@ func (rv RawViews) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		query := r.Form.Get("query")
-		body, err := Parse(query, Views(rv))
+		comp, err := Parse(query, Views(rv))
 		if err != nil {
 			webFail(w, "failed to parse the query: %v", err)
 		}
 
-		for t := <-body; t != nil; t = <-body {
+		for t := range comp.Run(Views(rv)) {
 			tab := ""
 			for _, v := range t {
 				fmt.Fprintf(w, "%v%v", tab, v)

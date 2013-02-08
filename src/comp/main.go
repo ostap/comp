@@ -87,47 +87,6 @@ func ReadBody(head Head, fileName string) ([]Tuple, error) {
 	return body, nil
 }
 
-func (r Body) Return(exprs []Expr) Body {
-	body := make(Body)
-	go func() {
-		for {
-			t := <-r
-			if t == nil {
-				break
-			}
-
-			tuple := make(Tuple, len(exprs))
-			for i, e := range exprs {
-				tuple[i] = Str(e(t))
-			}
-
-			body <- tuple
-		}
-		body <- nil
-	}()
-
-	return body
-}
-
-func (r Body) Select(expr Expr) Body {
-	body := make(Body)
-	go func() {
-		for {
-			t := <-r
-			if t == nil {
-				break
-			}
-
-			if Bool(expr(t)) {
-				body <- t
-			}
-		}
-		body <- nil
-	}()
-
-	return body
-}
-
 type Views struct {
 	heads  map[string]Head
 	bodies map[string][]Tuple
@@ -144,24 +103,16 @@ func (v Views) Store(name string, h Head, b []Tuple) {
 	v.bodies[name] = b
 }
 
-func (v Views) Has(name string) bool {
+func (v Views) IsDef(name string) bool {
 	return v.heads[name] != nil && v.bodies[name] != nil
 }
 
-func (v Views) Load(name string) (Head, Body) {
-	if !v.Has(name) {
-		return nil, nil
-	}
+func (v Views) Head(name string) Head {
+	return v.heads[name]
+}
 
-	body := make(Body)
-	go func() {
-		for _, t := range v.bodies[name] {
-			body <- t
-		}
-		body <- nil
-	}()
-
-	return v.heads[name], body
+func (v Views) Body(name string) []Tuple {
+	return v.bodies[name]
 }
 
 func main() {

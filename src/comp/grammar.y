@@ -10,17 +10,18 @@ import (
 	"math"
 )
 
-var gMem   *Mem
-var gViews Views
-var gComp  *Comp
-var gError error
+var gStore Store
 var gLex   *lexer
+
+var gMem   *Mem
+var gLoad  string
+var gComp  Comp
+var gError error
 %}
 
 %union {
 	str  string
 	num  float64
-	comp *Comp
 	expr Expr
 	args []Expr
 }
@@ -40,7 +41,7 @@ var gLex   *lexer
 %token <str> STRING
 
 %type <str>  identifier
-%type <comp> generator
+%type <str>  generator
 %type <expr> primary_expression
 %type <expr> postfix_expression
 %type <expr> unary_expression
@@ -56,20 +57,25 @@ var gLex   *lexer
 comprehension:
 	{ gComp = nil }
     | '[' expression_list '|' generator ']'
-	{ gComp = $4.Return($2) }
+	{
+		gLoad = $4
+		gComp = Return(Reflect, $2)
+	}
     | '[' expression_list '|' generator ',' expression ']'
-	{ gComp = $4.Select($6).Return($2) }
+	{
+		gLoad = $4
+		gComp = Return(Select(Reflect, $6), $2)
+	}
     ;
 
 generator:
       IDENT TK_PROD IDENT
 	{
-		if !gViews.IsDef($3) {
+		if !gStore.IsDef($3) {
 			parseError("unknown dataset %v", $3)
 		} else {
-			head := gViews.Head($3)
-			gMem.Decl($1, head)
-			$$ = Load($3)
+            gStore.Decl(gMem, $1, $3)
+			$$ = $3
 		}
 	}
     ;
@@ -362,7 +368,11 @@ expression:
 %%
 
 func parseError(s string, v ...interface{}) {
-	gError = fmt.Errorf("%+v - %v", gLex.scan.Pos(), fmt.Sprintf(s, v...))
+	if gError == nil {
+		gError = fmt.Errorf("%+v - %v", gLex.scan.Pos(), fmt.Sprintf(s, v...))
+	} else {
+		gError = fmt.Errorf("%v\n%+v - %v", gError, gLex.scan.Pos(), fmt.Sprintf(s, v...))
+	}
 }
 
 type lexer struct {
@@ -441,11 +451,14 @@ func (l *lexer) Error(s string) {
 	parseError(s)
 }
 
-func Parse(query string, views Views) (*Comp, error) {
-	gError = nil
-	gViews = views
-	gMem = NewMem()
+func Parse(query string, store Store) (string, Comp, error) {
+	gStore = store
 	gLex = &lexer{}
+
+	gMem = NewMem()
+	gLoad = ""
+	gComp = nil
+	gError = nil
 
 	reader := strings.NewReader(query)
 	gLex.scan.Init(reader)
@@ -458,5 +471,5 @@ func Parse(query string, views Views) (*Comp, error) {
 		}
 	}
 
-	return gComp, gError
+	return gLoad, gComp, gError
 }

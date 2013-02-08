@@ -89,45 +89,6 @@ func ReadBody(head Head, fileName string, split int) ([][]Tuple, error) {
 	return parts, nil
 }
 
-type Views struct {
-	heads  map[string]Head
-	bodies map[string][][]Tuple
-}
-
-type RawViews Views
-
-func NewViews() Views {
-	return Views{heads: make(map[string]Head), bodies: make(map[string][][]Tuple)}
-}
-
-func (v Views) Store(name string, head Head, parts [][]Tuple) {
-	v.heads[name] = head
-	v.bodies[name] = parts
-
-	info := ""
-	for i, p := range parts {
-		if i == 0 {
-			info = fmt.Sprintf("%v", len(p))
-		} else {
-			info = fmt.Sprintf("%v %v", info, len(p))
-		}
-	}
-
-	log.Printf("storing %v (%v)", name, info)
-}
-
-func (v Views) IsDef(name string) bool {
-	return v.heads[name] != nil && v.bodies[name] != nil
-}
-
-func (v Views) Head(name string) Head {
-	return v.heads[name]
-}
-
-func (v Views) Parts(name string) [][]Tuple {
-	return v.bodies[name]
-}
-
 func main() {
 	bind := flag.String("bind", "", "bind address, e.g. localhost:9090")
 	data := flag.String("data", "", "coma separated list of data files")
@@ -142,7 +103,7 @@ func main() {
 	log.Printf("running on %d core(s)", runtime.NumCPU())
 	log.Printf("adjusting runtime (old value %d)", runtime.GOMAXPROCS(runtime.NumCPU()))
 
-	views := NewViews()
+	store := NewStore()
 	for _, fileName := range strings.Split(*data, ",") {
 		name := path.Base(fileName)
 		if dot := strings.Index(name, "."); dot > 0 {
@@ -166,11 +127,11 @@ func main() {
 			continue
 		}
 
-		views.Store(name, head, parts)
+		store.Add(name, head, parts)
 	}
 
-	http.Handle("/", views)
-	http.Handle("/raw", RawViews(views))
+	http.Handle("/", WebQuery(store))
+	http.Handle("/raw", RawQuery(store))
 	http.Handle("/pprof/", http.StripPrefix("/pprof/", new(Profiler)))
 	http.ListenAndServe(*bind, nil)
 }

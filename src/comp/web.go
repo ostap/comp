@@ -16,6 +16,9 @@ import (
 	"time"
 )
 
+type WebQuery Store
+type RawQuery Store
+
 const QueryPage = `<!doctype html>
 <html>
   <head><title>Comp Query Panel</title></head>
@@ -52,7 +55,8 @@ func webFail(w http.ResponseWriter, msg string, args ...interface{}) {
 	log.Print(msg)
 }
 
-func (v Views) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (wq WebQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	store := Store(wq)
 	var obj struct {
 		Query string
 		Error error
@@ -66,12 +70,12 @@ func (v Views) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		obj.Query = r.Form.Get("query")
-		comp, err := Parse(obj.Query, v)
+		load, comp, err := Parse(obj.Query, store)
 		if err != nil {
 			obj.Error = err
 		} else {
 			t := time.Now()
-			for t := range comp.Run(v) {
+			for t := range store.Run(load, comp) {
 				obj.Body = append(obj.Body, t)
 			}
 			obj.Time = time.Now().Sub(t)
@@ -85,7 +89,8 @@ func (v Views) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (rv RawViews) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (rq RawQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	store := Store(rq)
 	if r.Method == "POST" {
 		if err := r.ParseForm(); err != nil {
 			webFail(w, "invalid form submission: %v", err)
@@ -93,12 +98,13 @@ func (rv RawViews) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		query := r.Form.Get("query")
-		comp, err := Parse(query, Views(rv))
+		load, comp, err := Parse(query, store)
 		if err != nil {
 			webFail(w, "failed to parse the query: %v", err)
+			return
 		}
 
-		for t := range comp.Run(Views(rv)) {
+		for t := range store.Run(load, comp) {
 			tab := ""
 			for _, v := range t {
 				fmt.Fprintf(w, "%v%v", tab, v)

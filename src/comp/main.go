@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
@@ -47,14 +48,14 @@ func ReadHead(fileName string) (Head, error) {
 	return res, nil
 }
 
-func ReadBody(head Head, fileName string) ([]Tuple, error) {
+func ReadBody(head Head, fileName string, split int) ([][]Tuple, error) {
 	log.Printf("loading file %v", fileName)
 	file, err := os.Open(fileName)
 	if err != nil {
 		return nil, err
 	}
 
-	body := make([]Tuple, 0)
+	parts := make([][]Tuple, split)
 	buf := bufio.NewReader(file)
 	lineNo := 0
 	for ; ; lineNo++ {
@@ -75,7 +76,8 @@ func ReadBody(head Head, fileName string) ([]Tuple, error) {
 			tuple = append(tuple, "")
 		}
 
-		body = append(body, tuple)
+		pos := lineNo % split
+		parts[pos] = append(parts[pos], tuple)
 
 		if lineNo%100000 == 0 {
 			log.Printf("line: %d", lineNo)
@@ -84,23 +86,34 @@ func ReadBody(head Head, fileName string) ([]Tuple, error) {
 
 	log.Printf("%d lines", lineNo)
 
-	return body, nil
+	return parts, nil
 }
 
 type Views struct {
 	heads  map[string]Head
-	bodies map[string][]Tuple
+	bodies map[string][][]Tuple
 }
 
 type RawViews Views
 
 func NewViews() Views {
-	return Views{heads: make(map[string]Head), bodies: make(map[string][]Tuple)}
+	return Views{heads: make(map[string]Head), bodies: make(map[string][][]Tuple)}
 }
 
-func (v Views) Store(name string, h Head, b []Tuple) {
-	v.heads[name] = h
-	v.bodies[name] = b
+func (v Views) Store(name string, head Head, parts [][]Tuple) {
+	v.heads[name] = head
+	v.bodies[name] = parts
+
+	info := ""
+	for i, p := range parts {
+		if i == 0 {
+			info = fmt.Sprintf("%v", len(p))
+		} else {
+			info = fmt.Sprintf("%v %v", info, len(p))
+		}
+	}
+
+	log.Printf("storing %v (%v)", name, info)
 }
 
 func (v Views) IsDef(name string) bool {
@@ -111,7 +124,7 @@ func (v Views) Head(name string) Head {
 	return v.heads[name]
 }
 
-func (v Views) Body(name string) []Tuple {
+func (v Views) Parts(name string) [][]Tuple {
 	return v.bodies[name]
 }
 
@@ -126,8 +139,8 @@ func main() {
 	}
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
-	// log.Printf("running on %d core(s)", runtime.NumCPU())
-	// log.Printf("adjusting runtime (old value %d)", runtime.GOMAXPROCS(runtime.NumCPU()))
+	log.Printf("running on %d core(s)", runtime.NumCPU())
+	log.Printf("adjusting runtime (old value %d)", runtime.GOMAXPROCS(runtime.NumCPU()))
 
 	views := NewViews()
 	for _, fileName := range strings.Split(*data, ",") {
@@ -147,13 +160,13 @@ func main() {
 			continue
 		}
 
-		body, err := ReadBody(head, fileName)
+		parts, err := ReadBody(head, fileName, runtime.NumCPU())
 		if err != nil {
 			log.Printf("cannot load %v: %v", fileName, err)
 			continue
 		}
 
-		views.Store(name, head, body)
+		views.Store(name, head, parts)
 	}
 
 	http.Handle("/", views)

@@ -52,15 +52,26 @@ func (c *Comp) Return(es []Expr) *Comp {
 }
 
 func (c *Comp) Run(v Views) Body {
-	in := v.Body(c.name)
+	parts := v.Parts(c.name)
 	out := make(Body)
-	go func() {
-		for _, t := range in {
-			if t = c.trans(t); t != nil {
-				out <- t
-			}
-		}
+	ctl := make(chan int)
 
+	for _, p := range parts {
+		go func() {
+			for _, t := range p {
+				if t = c.trans(t); t != nil {
+					out <- t
+				}
+			}
+
+			ctl <- 1
+		}()
+	}
+
+	go func() {
+		for i := 0; i < len(parts); i++ {
+			<-ctl
+		}
 		close(out)
 	}()
 

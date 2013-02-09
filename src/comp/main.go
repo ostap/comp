@@ -16,7 +16,7 @@ import (
 type Body chan Tuple
 type Head map[string]int
 type Tuple []string
-type Expr func(t Tuple) Value
+type Expr func(m *Mem, t Tuple) Value
 
 func IsIdent(s string) bool {
 	ident, _ := regexp.MatchString("^\\w+$", s)

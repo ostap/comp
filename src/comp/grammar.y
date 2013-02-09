@@ -2,7 +2,6 @@
 package main
 
 import (
-	"regexp"
 	"text/scanner"
 	"strings"
 	"strconv"
@@ -74,7 +73,7 @@ generator:
 		if !gStore.IsDef($3) {
 			parseError("unknown dataset %v", $3)
 		} else {
-            gStore.Decl(gMem, $1, $3)
+			gStore.Declare(gMem, $1, $3)
 			$$ = $3
 		}
 	}
@@ -84,14 +83,14 @@ primary_expression:
       STRING
 	{
 		val := Value($1)
-		$$ = func(t Tuple) Value {
+		$$ = func(m *Mem, t Tuple) Value {
 			return val
 		}
 	}
     | NUMBER
 	{
 		val := Value($1)
-		$$ = func(t Tuple) Value {
+		$$ = func(m *Mem, t Tuple) Value {
 			return val
 		}
 	}
@@ -109,9 +108,9 @@ postfix_expression:
 	{ $$ = $1 }
     | identifier
 	{
-		pos := gMem.PosPtr($1)
-		$$ = func(t Tuple) Value {
-			return t[*pos]
+		pos := gMem.AttrPos($1)
+		$$ = func(m *Mem, t Tuple) Value {
+			return t[m.Attrs[pos]]
 		}
 	}
     | identifier '(' ')'
@@ -129,9 +128,9 @@ postfix_expression:
 				parseError("trunc takes only 1 argument")
 			}
 
-			expr := $3[0]
-			$$ = func(t Tuple) Value {
-				return math.Trunc(Num(expr(t)))
+			e := $3[0]
+			$$ = func(m *Mem, t Tuple) Value {
+				return math.Trunc(Num(e(m, t)))
 			}
 		case "dist":
 			if len($3) != 4 {
@@ -142,11 +141,11 @@ postfix_expression:
 			lon1expr := $3[1]
 			lat2expr := $3[2]
 			lon2expr := $3[3]
-			$$ = func(t Tuple) Value {
-				lat1 := Num(lat1expr(t))
-				lon1 := Num(lon1expr(t))
-				lat2 := Num(lat2expr(t))
-				lon2 := Num(lon2expr(t))
+			$$ = func(m *Mem, t Tuple) Value {
+				lat1 := Num(lat1expr(m, t))
+				lon1 := Num(lon1expr(m, t))
+				lat2 := Num(lat2expr(m, t))
+				lon2 := Num(lon2expr(m, t))
 
 				return Dist(lat1, lon1, lat2, lon2)
 			}
@@ -155,27 +154,27 @@ postfix_expression:
 				parseError("trim takes only 1 argument")
 			}
 
-			expr := $3[0]
-			$$ = func(t Tuple) Value {
-				return strings.Trim(Str(expr(t)), " \t\n\r")
+			e := $3[0]
+			$$ = func(m *Mem, t Tuple) Value {
+				return strings.Trim(Str(e(m, t)), " \t\n\r")
 			}
 		case "lower":
 			if len($3) != 1 {
 				parseError("lower takes only 1 argument")
 			}
 
-			expr := $3[0]
-			$$ = func(t Tuple) Value {
-				return strings.ToLower(Str(expr(t)))
+			e := $3[0]
+			$$ = func(m *Mem, t Tuple) Value {
+				return strings.ToLower(Str(e(m, t)))
 			}
 		case "upper":
 			if len($3) != 1 {
 				parseError("upper takes only 1 argument")
 			}
 
-			expr := $3[0]
-			$$ = func(t Tuple) Value {
-				return strings.ToUpper(Str(expr(t)))
+			e := $3[0]
+			$$ = func(m *Mem, t Tuple) Value {
+				return strings.ToUpper(Str(e(m, t)))
 			}
 		case "fuzzy":
 			if len($3) != 2 {
@@ -184,8 +183,8 @@ postfix_expression:
 
 			se := $3[0]
 			te := $3[1]
-			$$ = func(t Tuple) Value {
-				return Fuzzy(Str(se(t)), Str(te(t)))
+			$$ = func(m *Mem, t Tuple) Value {
+				return Fuzzy(Str(se(m, t)), Str(te(m, t)))
 			}
 		default:
 			parseError("unknown function %v", $1)
@@ -203,23 +202,23 @@ unary_expression:
 	{ $$ = $1 }
     | '!' postfix_expression
 	{
-		expr := $2
-		$$ = func(t Tuple) Value {
-			return !Bool(expr(t))
+		e := $2
+		$$ = func(m *Mem, t Tuple) Value {
+			return !Bool(e(m, t))
 		}
 	}
     | '-' postfix_expression
 	{
-		expr := $2
-		$$ = func(t Tuple) Value {
-			return -Num(expr(t))
+		e := $2
+		$$ = func(m *Mem, t Tuple) Value {
+			return -Num(e(m, t))
 		}
 	}
     | '+' postfix_expression
 	{
-		expr := $2
-		$$ = func(t Tuple) Value {
-			return +Num(expr(t))
+		e := $2
+		$$ = func(m *Mem, t Tuple) Value {
+			return +Num(e(m, t))
 		}
 	}
     ;
@@ -231,16 +230,16 @@ multiplicative_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Num(l(t)) * Num(r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Num(l(m, t)) * Num(r(m, t))
 		}
 	}
     | multiplicative_expression '/' unary_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Num(l(t)) / Num(r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Num(l(m, t)) / Num(r(m, t))
 		}
 	}
     ;
@@ -252,24 +251,24 @@ additive_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Num(l(t)) + Num(r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Num(l(m, t)) + Num(r(m, t))
 		}
 	}
     | additive_expression '-' multiplicative_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Num(l(t)) - Num(r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Num(l(m, t)) - Num(r(m, t))
 		}
 	}
     | additive_expression TK_CAT multiplicative_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Str(l(t)) + Str(r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Str(l(m, t)) + Str(r(m, t))
 		}
 	}
     ;
@@ -281,32 +280,32 @@ relational_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Num(l(t)) < Num(r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Num(l(m, t)) < Num(r(m, t))
 		}
 	}
     | relational_expression '>' additive_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Num(l(t)) > Num(r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Num(l(m, t)) > Num(r(m, t))
 		}
 	}
     | relational_expression TK_LTEQ additive_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Num(l(t)) <= Num(r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Num(l(m, t)) <= Num(r(m, t))
 		}
 	}
     | relational_expression TK_GTEQ additive_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Num(l(t)) >= Num(r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Num(l(m, t)) >= Num(r(m, t))
 		}
 	}
     ;
@@ -318,28 +317,28 @@ equality_expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Eq(l(t), r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Eq(l(m, t), r(m, t))
 		}
 	}
     | equality_expression TK_NEQ relational_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return !Eq(l(t), r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return !Eq(l(m, t), r(m, t))
 		}
 	}
     | equality_expression TK_MATCH STRING
 	{
-		re, err := regexp.Compile($3)
+		re, err := gMem.RegExp($3)
 		if err != nil {
 			parseError("%v", err)
 		}
 
-		expr := $1
-		$$ = func(t Tuple) Value {
-			return re.MatchString(Str(expr(t)))
+		e := $1
+		$$ = func(m *Mem, t Tuple) Value {
+			return m.MatchString(re, Str(e(m, t)))
 		}
 	}
     ;
@@ -351,16 +350,16 @@ expression:
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Bool(l(t)) && Bool(r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Bool(l(m, t)) && Bool(r(m, t))
 		}
 	}
     | expression TK_OR equality_expression
 	{
 		l := $1
 		r := $3
-		$$ = func(t Tuple) Value {
-			return Bool(l(t)) || Bool(r(t))
+		$$ = func(m *Mem, t Tuple) Value {
+			return Bool(l(m, t)) || Bool(r(m, t))
 		}
 	}
     ;
@@ -451,7 +450,7 @@ func (l *lexer) Error(s string) {
 	parseError(s)
 }
 
-func Parse(query string, store Store) (string, Comp, error) {
+func Parse(query string, store Store) (*Mem, string, Comp, error) {
 	gStore = store
 	gLex = &lexer{}
 
@@ -471,5 +470,5 @@ func Parse(query string, store Store) (string, Comp, error) {
 		}
 	}
 
-	return gLoad, gComp, gError
+	return gMem, gLoad, gComp, gError
 }

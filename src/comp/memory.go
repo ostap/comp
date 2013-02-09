@@ -2,53 +2,72 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 )
 
 type Mem struct {
-	posIdx map[string]int  // attribute positions (index in posVal)
-	posVal [1024]int       // the actual attribute positions
-	posOk  map[string]bool // status of attribute declarations
+	Attrs []int // attribute positions within a tuple
+
+	regexps  []*regexp.Regexp // regular expressions used by the query
+	patterns []string         // patterns of the regular expressions
+	posIdx   map[string]int   // attribute positions (index in m.attrs)
+	posOk    map[string]bool  // status of attribute declarationis
 }
 
 func NewMem() *Mem {
 	return &Mem{posIdx: make(map[string]int), posOk: make(map[string]bool)}
 }
 
-// Returns a pointer to the attribute position within a tuple. The pointer value
-// is only valid after the corresponding Decl() call.
-func (m *Mem) PosPtr(name string) *int {
+// AttrPos returns the attribute position (an index in m.Attrs).
+func (m *Mem) AttrPos(name string) int {
 	val := m.posOk[name]
 	m.posOk[name] = val
 
+	return m.findAttr(name)
+}
+
+// RegExp returns the regular expression id (to be used in consequent m.MatchString() calls).
+func (m *Mem) RegExp(pattern string) (int, error) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return -1, err
+	}
+
+	pos := len(m.regexps)
+	m.regexps = append(m.regexps, re)
+	m.patterns = append(m.patterns, pattern)
+
+	return pos, nil
+}
+
+// MatchString checks if the regular expression re matches the string s.
+func (m *Mem) MatchString(re int, s string) bool {
+	return m.regexps[re].MatchString(s)
+}
+
+func (m *Mem) findAttr(name string) int {
 	idx, ok := m.posIdx[name]
 	if !ok {
-		idx = len(m.posIdx)
+		idx = len(m.Attrs)
+		m.Attrs = append(m.Attrs, -1)
 		m.posIdx[name] = idx
 	}
 
-	if idx >= len(m.posVal) {
-		return nil
-	}
-
-	return &m.posVal[idx]
+	return idx
 }
 
-// Declare a collection. To get an list of bad attribute identifiers call BadAttrs().
-func (m *Mem) Decl(name string, head Head) {
+// Declare attributes. To get the list of undeclared attributes call m.BadAttrs().
+func (m *Mem) Declare(name string, head Head) {
 	for attr, idx := range head {
 		ident := fmt.Sprintf("%v.%v", name, attr)
-		posIdx, ok := m.posIdx[ident]
-		if !ok {
-			posIdx = len(m.posIdx)
-			m.posIdx[ident] = posIdx
-		}
+		pos := m.findAttr(ident)
 
-		m.posVal[posIdx] = idx
+		m.Attrs[pos] = idx
 		m.posOk[ident] = true
 	}
 }
 
-// Returns a list of invalid identifiers.
+// BadAttrs returns all attribute identifiers which are not known (e.g. were not m.Declare()).
 func (m *Mem) BadAttrs() []string {
 	var bad []string
 	for ident, ok := range m.posOk {
@@ -58,4 +77,20 @@ func (m *Mem) BadAttrs() []string {
 	}
 
 	return bad
+}
+
+// Clone the memory to run in a separate goroutine.
+func (m *Mem) Clone() *Mem {
+	attrs := make([]int, len(m.Attrs))
+	regexps := make([]*regexp.Regexp, len(m.patterns))
+	patterns := make([]string, len(m.patterns))
+
+	copy(attrs, m.Attrs)
+	copy(patterns, m.patterns)
+
+	for i, p := range patterns {
+		regexps[i] = regexp.MustCompile(p)
+	}
+
+	return &Mem{Attrs: attrs, regexps: regexps, patterns: patterns}
 }

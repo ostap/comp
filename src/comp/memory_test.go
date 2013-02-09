@@ -5,25 +5,25 @@ import "testing"
 func TestPos(t *testing.T) {
 	mem := NewMem()
 
-	aa := mem.PosPtr("a.a")
-	ab1 := mem.PosPtr("a.b")
-	ca := mem.PosPtr("c.a")
-	ab2 := mem.PosPtr("a.b")
+	aa := mem.AttrPos("a.a")
+	ab1 := mem.AttrPos("a.b")
+	ca := mem.AttrPos("c.a")
+	ab2 := mem.AttrPos("a.b")
 
 	head := make(Head)
 	head["a"] = 0
 	head["b"] = 1
 
-	mem.Decl("a", head)
+	mem.Declare("a", head)
 	if bad := mem.BadAttrs(); len(bad) != 1 || bad[0] != "c.a" {
 		t.Errorf("invalid BadAttrs")
 	}
 
-	if *aa != 0 || *ab1 != 1 || *ab2 != 1 {
+	if mem.Attrs[aa] != 0 || mem.Attrs[ab1] != 1 || mem.Attrs[ab2] != 1 {
 		t.Errorf("invalid positions")
 	}
 
-	if *ca != 0 {
-		t.Errorf("c.a should be 0")
+	if mem.Attrs[ca] != -1 {
+		t.Errorf("c.a should be -1")
 	}
 }

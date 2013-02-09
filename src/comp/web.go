@@ -70,12 +70,12 @@ func (wq WebQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		obj.Query = r.Form.Get("query")
-		load, comp, err := Parse(obj.Query, store)
+		mem, load, comp, err := Parse(obj.Query, store)
 		if err != nil {
 			obj.Error = err
 		} else {
 			t := time.Now()
-			for t := range store.Run(load, comp) {
+			for t := range store.Run(mem, load, comp) {
 				obj.Body = append(obj.Body, t)
 			}
 			obj.Time = time.Now().Sub(t)
@@ -98,13 +98,13 @@ func (rq RawQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		query := r.Form.Get("query")
-		load, comp, err := Parse(query, store)
+		mem, load, comp, err := Parse(query, store)
 		if err != nil {
 			webFail(w, "failed to parse the query: %v", err)
 			return
 		}
 
-		for t := range store.Run(load, comp) {
+		for t := range store.Run(mem, load, comp) {
 			tab := ""
 			for _, v := range t {
 				fmt.Fprintf(w, "%v%v", tab, v)

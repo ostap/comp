@@ -13,6 +13,7 @@ type Store struct {
 type WorkQueue chan WorkUnit
 
 type WorkUnit struct {
+	mem    *Mem
 	comp   Comp
 	out    Body
 	closer chan int
@@ -50,11 +51,11 @@ func (s Store) Add(name string, head Head, parts [][]Tuple) {
 	log.Printf("stored %v (recs %v | parts %v)", name, recs, info)
 }
 
-func (s Store) Run(load string, comp Comp) Body {
+func (s Store) Run(mem *Mem, load string, comp Comp) Body {
 	out := make(Body)
 	closer := make(chan int)
 	for _, wq := range s.workers[load] {
-		wq <- WorkUnit{comp, out, closer}
+		wq <- WorkUnit{mem.Clone(), comp, out, closer}
 	}
 
 	workers := len(s.workers[load])
@@ -68,14 +69,14 @@ func (s Store) Run(load string, comp Comp) Body {
 	return out
 }
 
-func (s Store) Decl(m *Mem, prefix, name string) {
-	m.Decl(prefix, s.heads[name])
+func (s Store) Declare(m *Mem, prefix, name string) {
+	m.Declare(prefix, s.heads[name])
 }
 
 func worker(wq WorkQueue, part []Tuple) {
 	for w := range wq {
 		for _, t := range part {
-			if t = w.comp(t); t != nil {
+			if t = w.comp(w.mem, t); t != nil {
 				w.out <- t
 			}
 		}

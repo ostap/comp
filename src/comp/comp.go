@@ -1,15 +1,15 @@
 package main
 
-type Comp func(t Tuple) Tuple
+type Comp func(m *Mem, t Tuple) Tuple
 
-func Reflect(t Tuple) Tuple {
+func Reflect(m *Mem, t Tuple) Tuple {
 	return t
 }
 
 func Select(c Comp, e Expr) Comp {
-	return func(t Tuple) Tuple {
+	return func(m *Mem, t Tuple) Tuple {
 		if t != nil {
-			if t = c(t); t != nil && Bool(e(t)) {
+			if t = c(m, t); t != nil && Bool(e(m, t)) {
 				return t
 			}
 		}
@@ -19,12 +19,12 @@ func Select(c Comp, e Expr) Comp {
 }
 
 func Return(c Comp, es []Expr) Comp {
-	return func(t Tuple) Tuple {
+	return func(m *Mem, t Tuple) Tuple {
 		if t != nil {
-			if t = c(t); t != nil {
+			if t = c(m, t); t != nil {
 				tuple := make(Tuple, len(es))
 				for i, e := range es {
-					tuple[i] = Str(e(t))
+					tuple[i] = Str(e(m, t))
 				}
 				return tuple
 			}

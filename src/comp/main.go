@@ -1,93 +1,20 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path"
-	"regexp"
 	"runtime"
 	"strings"
 )
 
 type Body chan Tuple
 type Head map[string]int
-type Tuple []string
+type Tuple []Value
 type Expr func(m *Mem, t Tuple) Value
-
-func IsIdent(s string) bool {
-	ident, _ := regexp.MatchString("^\\w+$", s)
-	return ident
-}
-
-func ReadHead(fileName string) (Head, error) {
-	file, err := os.Open(fileName)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	buf := bufio.NewReader(file)
-	str, err := buf.ReadString('\n')
-	if err != nil {
-		return nil, err
-	}
-
-	res := make(Head)
-	for idx, attr := range strings.Split(str, "\t") {
-		attr = strings.Trim(attr, " \r\n")
-		if !IsIdent(attr) {
-			return nil, fmt.Errorf("invalid attribute name: '%v'", attr)
-		}
-		res[attr] = idx
-	}
-
-	return res, nil
-}
-
-func ReadBody(head Head, fileName string, split int) ([][]Tuple, error) {
-	log.Printf("loading file %v", fileName)
-	file, err := os.Open(fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	parts := make([][]Tuple, split)
-	buf := bufio.NewReader(file)
-	lineNo := 0
-	for ; ; lineNo++ {
-		line, _ := buf.ReadString('\n')
-		if len(line) == 0 {
-			break
-		}
-		if lineNo == 0 {
-			continue
-		}
-
-		tuple := strings.Split(line[:len(line)-1], "\t")
-		if len(tuple) > len(head) {
-			tuple = tuple[:len(head)]
-		}
-
-		for len(tuple) < len(head) {
-			tuple = append(tuple, "")
-		}
-
-		pos := lineNo % split
-		parts[pos] = append(parts[pos], tuple)
-
-		if lineNo%100000 == 0 {
-			log.Printf("line: %d", lineNo)
-		}
-	}
-
-	log.Printf("%d lines", lineNo)
-
-	return parts, nil
-}
 
 func main() {
 	bind := flag.String("bind", "", "bind address, e.g. localhost:9090")
@@ -129,6 +56,13 @@ func main() {
 
 		store.Add(name, head, parts)
 	}
+
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	log.Printf("garbage collecting (heap ~%vMB)", m.Alloc/1024/1024)
+	runtime.GC()
+	runtime.ReadMemStats(&m)
+	log.Printf("done (heap ~%vMB)", m.Alloc/1024/1024)
 
 	http.Handle("/", WebQuery(store))
 	http.Handle("/raw", RawQuery(store))

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -79,6 +80,8 @@ func (wq WebQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				obj.Body = append(obj.Body, t)
 			}
 			obj.Time = time.Now().Sub(t)
+
+			log.Printf("%v for %v", obj.Time, obj.Query)
 		}
 	}
 
@@ -123,8 +126,6 @@ type Profiler struct {
 
 // See pprof_remote_servers.html bundled with the gperftools.
 func (p *Profiler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("%v", r.URL)
-
 	switch r.URL.Path {
 	case "cmdline":
 		for _, arg := range os.Args {
@@ -142,6 +143,15 @@ func (p *Profiler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			buf.WriteTo(w)
 		} else {
 			webFail(w, "invalid profile request, expected seconds=XX")
+		}
+	case "memstats":
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		buf, err := json.MarshalIndent(m, "", "  ")
+		if err != nil {
+			webFail(w, "failed to marshal object: %v", err)
+		} else {
+			w.Write(buf)
 		}
 	case "symbol":
 		if r.Method == "GET" {

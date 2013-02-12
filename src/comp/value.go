@@ -55,6 +55,15 @@ func Str(v Value) string {
 	return ""
 }
 
+func Quote(v Value) string {
+	str, isStr := v.(string)
+	if isStr {
+		return strconv.Quote(str)
+	}
+
+	return fmt.Sprintf("%v", v)
+}
+
 // TODO: check reflexivity, symmetry, transitivity
 func Eq(l, r Value) bool {
 	switch lv := l.(type) {

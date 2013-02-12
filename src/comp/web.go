@@ -25,7 +25,7 @@ const QueryPage = `<!doctype html>
   <head><title>Comp Query Panel</title></head>
   <body>
     <h1>Query</h1>
-    <form method="POST" action="/">
+    <form method="POST" action="/console">
       <input name="query" type="text" spellcheck="false" value="{{html .Query}}" size="120"></input>
       <input name="run" type="submit" value="Run"></input>
     </form>
@@ -95,26 +95,37 @@ func (wq WebQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (rq RawQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	store := Store(rq)
 	if r.Method == "POST" {
-		if err := r.ParseForm(); err != nil {
-			webFail(w, "invalid form submission: %v", err)
-			return
+		query, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			webFail(w, "failed to read request body: %v", err)
 		}
 
-		query := r.Form.Get("query")
-		mem, load, comp, err := Parse(query, store)
+		mem, load, comp, err := Parse(string(query), store)
 		if err != nil {
 			webFail(w, "failed to parse the query: %v", err)
 			return
 		}
 
+		count := 0
+		fmt.Fprintf(w, "[ ")
 		for t := range store.Run(mem, load, comp) {
-			tab := ""
-			for _, v := range t {
-				fmt.Fprintf(w, "%v%v", tab, v)
-				tab = "\t"
+			if count == 0 {
+				fmt.Fprintf(w, "[ ")
+			} else {
+				fmt.Fprintf(w, ", [ ")
 			}
-			fmt.Fprintf(w, "\n")
+
+			for i, v := range t {
+				if i == 0 {
+					fmt.Fprintf(w, "%v", Quote(v))
+				} else {
+					fmt.Fprintf(w, ", %v", Quote(v))
+				}
+			}
+			fmt.Fprintf(w, " ]")
+			count++
 		}
+		fmt.Fprintf(w, " ]")
 	} else {
 		webFail(w, "unsupported method %v", r.Method)
 		return

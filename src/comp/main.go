@@ -64,8 +64,8 @@ func main() {
 	runtime.ReadMemStats(&m)
 	log.Printf("done (heap ~%vMB)", m.Alloc/1024/1024)
 
-	http.Handle("/", WebQuery(store))
-	http.Handle("/raw", RawQuery(store))
+	http.Handle("/", RawQuery(store))
+	http.Handle("/console", WebQuery(store))
 	http.Handle("/pprof/", http.StripPrefix("/pprof/", new(Profiler)))
 	http.ListenAndServe(*bind, nil)
 }

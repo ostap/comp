@@ -24,7 +24,7 @@ func Return(c Comp, es []Expr) Comp {
 			if t = c(m, t); t != nil {
 				tuple := make(Tuple, len(es))
 				for i, e := range es {
-					tuple[i] = Str(e(m, t))
+					tuple[i] = e(m, t)
 				}
 				return tuple
 			}

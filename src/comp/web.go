@@ -20,6 +20,17 @@ import (
 type WebQuery Store
 type RawQuery Store
 
+type QueryReq struct {
+	Query string `json:"query"`
+	Limit int    `json:"limit"`
+}
+
+type QueryResp struct {
+	Total int     `json:"total"`
+	Time  string  `json:"time"`
+	Body  []Tuple `json:"body"`
+}
+
 const QueryPage = `<!doctype html>
 <html>
   <head><title>Comp Query Panel</title></head>
@@ -56,6 +67,39 @@ func webFail(w http.ResponseWriter, msg string, args ...interface{}) {
 	log.Print(msg)
 }
 
+func readJSON(r *http.Request, data interface{}) *ParseError {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("failed to read json: %v", err)
+		return NewError(-1, -1, "failed to read json")
+	}
+
+	err = json.Unmarshal(body, data)
+	if err != nil {
+		log.Printf("failed to unmarshal json: %v", err)
+		return NewError(-1, -1, "failed to unmarshal json")
+	}
+
+	return nil
+}
+
+func writeJSON(w http.ResponseWriter, data interface{}) *ParseError {
+	msg, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("failed to marshal json: %v", err)
+		return NewError(-1, -1, "failed to marshal json")
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	_, err = w.Write(msg)
+	if err != nil {
+		log.Printf("failed to write json response: %v", err)
+		return NewError(-1, -1, "failed to write json response")
+	}
+
+	return nil
+}
+
 func (wq WebQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	store := Store(wq)
 	var obj struct {
@@ -73,7 +117,7 @@ func (wq WebQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		obj.Query = r.Form.Get("query")
 		mem, load, comp, err := Parse(obj.Query, store)
 		if err != nil {
-			obj.Error = err
+			obj.Error = fmt.Errorf(err.Error)
 		} else {
 			t := time.Now()
 			for t := range store.Run(mem, load, comp) {
@@ -95,37 +139,29 @@ func (wq WebQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (rq RawQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	store := Store(rq)
 	if r.Method == "POST" {
-		query, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			webFail(w, "failed to read request body: %v", err)
+		start := time.Now()
+		var req QueryReq
+		if err := readJSON(r, &req); err != nil {
+			writeJSON(w, err)
 		}
 
-		mem, load, comp, err := Parse(string(query), store)
+		mem, load, comp, err := Parse(req.Query, store)
 		if err != nil {
-			webFail(w, "failed to parse the query: %v", err)
+			log.Printf("failed to parse '%v': %v", req.Query, err)
+			writeJSON(w, err)
 			return
 		}
 
+		body := make([]Tuple, req.Limit)
 		count := 0
-		fmt.Fprintf(w, "[ ")
 		for t := range store.Run(mem, load, comp) {
-			if count == 0 {
-				fmt.Fprintf(w, "[ ")
-			} else {
-				fmt.Fprintf(w, ", [ ")
+			if count < req.Limit {
+				body[count] = t
 			}
-
-			for i, v := range t {
-				if i == 0 {
-					fmt.Fprintf(w, "%v", Quote(v))
-				} else {
-					fmt.Fprintf(w, ", %v", Quote(v))
-				}
-			}
-			fmt.Fprintf(w, " ]")
 			count++
 		}
-		fmt.Fprintf(w, " ]")
+
+		writeJSON(w, &QueryResp{Total: count, Time: time.Now().Sub(start).String(), Body: body})
 	} else {
 		webFail(w, "unsupported method %v", r.Method)
 		return

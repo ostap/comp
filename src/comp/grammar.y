@@ -9,13 +9,23 @@ import (
 	"math"
 )
 
+type ParseError struct {
+	Line   int    `json:"line"`
+	Column int    `json:"column"`
+	Error  string `json:"error"`
+}
+
+func NewError(line, column int, msg string, args ...interface{}) *ParseError {
+	return &ParseError{Line: line, Column: column, Error: fmt.Sprintf(msg, args...)}
+}
+
 var gStore Store
 var gLex   *lexer
 
 var gMem   *Mem
 var gLoad  string
 var gComp  Comp
-var gError error
+var gError *ParseError
 %}
 
 %union {
@@ -367,11 +377,7 @@ expression:
 %%
 
 func parseError(s string, v ...interface{}) {
-	if gError == nil {
-		gError = fmt.Errorf("%+v - %v", gLex.scan.Pos(), fmt.Sprintf(s, v...))
-	} else {
-		gError = fmt.Errorf("%v\n%+v - %v", gError, gLex.scan.Pos(), fmt.Sprintf(s, v...))
-	}
+	gError = NewError(gLex.scan.Pos().Line, gLex.scan.Pos().Column, s, v...)
 }
 
 type lexer struct {
@@ -450,7 +456,7 @@ func (l *lexer) Error(s string) {
 	parseError(s)
 }
 
-func Parse(query string, store Store) (*Mem, string, Comp, error) {
+func Parse(query string, store Store) (*Mem, string, Comp, *ParseError) {
 	gStore = store
 	gLex = &lexer{}
 
@@ -466,7 +472,7 @@ func Parse(query string, store Store) (*Mem, string, Comp, error) {
 	if gError == nil {
 		bad := gMem.BadAttrs()
 		if len(bad) > 0 {
-			gError = fmt.Errorf("unknown identifier(s): %v", bad)
+			gError = NewError(0, 0, "unknown identifier(s): %v", bad)
 		}
 	}
 

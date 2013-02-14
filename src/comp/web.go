@@ -152,11 +152,11 @@ func (rq RawQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		body := make([]Tuple, req.Limit)
+		body := make([]Tuple, 0)
 		count := 0
 		for t := range store.Run(mem, load, comp) {
 			if count < req.Limit {
-				body[count] = t
+				body = append(body, t)
 			}
 			count++
 		}

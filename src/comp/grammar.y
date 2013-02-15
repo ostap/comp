@@ -127,7 +127,7 @@ postfix_expression:
 	{
 		switch $1 {
 		default:
-			parseError("x unknown function %v", $1)
+			parseError("unknown function %v()", $1)
 		}
 	}
     | identifier '(' expression_list ')'
@@ -197,7 +197,7 @@ postfix_expression:
 				return Fuzzy(Str(se(m, t)), Str(te(m, t)))
 			}
 		default:
-			parseError("unknown function %v", $1)
+			parseError("unknown function %v(%v)", $1, len($3))
 		}
 	}
     ;

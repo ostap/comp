@@ -155,15 +155,18 @@ func (rq RawQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body := make([]Tuple, 0)
 		count := 0
 		for t := range store.Run(mem, load, comp) {
-			if count < req.Limit {
+			if req.Limit < 0 || count < req.Limit {
 				body = append(body, t)
 			}
 			count++
 		}
 
-		writeJSON(w, &QueryResp{Total: count, Time: time.Now().Sub(start).String(), Body: body})
+		resp := &QueryResp{Total: count, Time: time.Now().Sub(start).String(), Body: body}
+		writeJSON(w, resp)
+
+		log.Printf("%v for %v", resp.Time, req.Query)
 	} else {
-		webFail(w, "unsupported method %v", r.Method)
+		webFail(w, "%v unsupported method %v", r.URL, r.Method)
 		return
 	}
 }

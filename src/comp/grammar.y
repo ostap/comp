@@ -2,11 +2,12 @@
 package main
 
 import (
-	"text/scanner"
-	"strings"
-	"strconv"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
+	"sync"
+	"text/scanner"
 )
 
 type ParseError struct {
@@ -18,6 +19,8 @@ type ParseError struct {
 func NewError(line, column int, msg string, args ...interface{}) *ParseError {
 	return &ParseError{Line: line, Column: column, Error: fmt.Sprintf(msg, args...)}
 }
+
+var gMutex sync.Mutex
 
 var gStore Store
 var gLex   *lexer
@@ -457,6 +460,9 @@ func (l *lexer) Error(s string) {
 }
 
 func Parse(query string, store Store) (*Mem, string, Comp, *ParseError) {
+	gMutex.Lock()
+	defer gMutex.Unlock()
+
 	gStore = store
 	gLex = &lexer{}
 

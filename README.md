@@ -15,3 +15,9 @@ $ go install comp
 $ comp -bind :9090 -data geonames.txt,zipcodes.txt
 $ lynx localhost:9090
 ```
+
+Distributed mode:
+``` bash
+host1$ comp -data geonames.0.txt,zipcodes.0.txt -peers http://host2:9090/part
+host2$ comp -data geonames.1.txt,zipcodes.1.txt -peers http://host1:9090/part
+```

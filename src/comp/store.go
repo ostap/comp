@@ -51,8 +51,7 @@ func (s Store) Add(name string, head Head, parts [][]Tuple) {
 	log.Printf("stored %v (recs %v | parts %v)", name, recs, info)
 }
 
-func (s Store) Run(mem *Mem, load string, comp Comp) Body {
-	out := make(Body)
+func (s Store) Run(mem *Mem, load string, comp Comp, out Body, ctl chan int) {
 	closer := make(chan int)
 	for _, wq := range s.workers[load] {
 		wq <- WorkUnit{mem.Clone(), comp, out, closer}
@@ -63,10 +62,8 @@ func (s Store) Run(mem *Mem, load string, comp Comp) Body {
 		for i := 0; i < workers; i++ {
 			<-closer
 		}
-		close(out)
+		ctl <- 1
 	}()
-
-	return out
 }
 
 func (s Store) Declare(m *Mem, prefix, name string) {

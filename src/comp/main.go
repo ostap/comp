@@ -2,27 +2,26 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"path"
 	"runtime"
 	"strings"
 )
 
+type Tuple []Value
 type Body chan Tuple
 type Head map[string]int
-type Tuple []Value
 type Expr func(m *Mem, t Tuple) Value
 
 func main() {
-	bind := flag.String("bind", "", "bind address, e.g. localhost:9090")
-	data := flag.String("data", "", "coma separated list of data files")
+	bind := flag.String("bind", "localhost:9090", "bind address")
+	data := flag.String("data", "", "list of data files")
+	peers := flag.String("peers", "", "list of peers (excluding self)")
 	flag.Parse()
 
-	if *bind == "" || *data == "" {
-		fmt.Printf("usage: %v -bind localhost:9090 -data file1.txt,file2.txt\n", os.Args[0])
+	if *data == "" {
+		flag.Usage()
 		return
 	}
 
@@ -64,8 +63,12 @@ func main() {
 	runtime.ReadMemStats(&m)
 	log.Printf("done (heap ~%vMB)", m.Alloc/1024/1024)
 
-	http.Handle("/", RawQuery(store))
-	http.Handle("/console", WebQuery(store))
-	http.Handle("/pprof/", http.StripPrefix("/pprof/", new(Profiler)))
-	http.ListenAndServe(*bind, nil)
+	log.Printf("announcing /full /part /console /pprof")
+
+	group := NewGroup(store, strings.Split(*peers, ","))
+	http.Handle("/full", FullQuery(group))
+	http.Handle("/part", PartQuery(group))
+	http.Handle("/console", Console(0))
+	http.Handle("/pprof/", http.StripPrefix("/pprof/", Profiler(0)))
+	log.Fatal(http.ListenAndServe(*bind, nil))
 }

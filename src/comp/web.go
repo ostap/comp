@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,169 +14,107 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 )
 
-type WebQuery Store
-type RawQuery Store
-
-type QueryReq struct {
-	Query string `json:"query"`
-	Limit int    `json:"limit"`
-}
-
-type QueryResp struct {
-	Total int     `json:"total"`
-	Time  string  `json:"time"`
-	Body  []Tuple `json:"body"`
-}
+type Console int
+type Profiler int
+type FullQuery Group
+type PartQuery Group
 
 const QueryPage = `<!doctype html>
 <html>
-  <head><title>Comp Query Panel</title></head>
+  <head>
+    <title>Comp Console</title>
+    <script type="text/javascript">
+    function $(id) { return document.getElementById(id); }
+    function info(msg) { $("info").innerHTML = msg; }
+    function query() {
+      info("processing ...");
+      var req = new XMLHttpRequest();
+      req.open("POST", "/full", false);
+      req.send(JSON.stringify({ query: $("query").value, limit: -1 }));
+
+      info("parsing ...");
+      var resp = JSON.parse(req.responseText);
+      if (resp.error) {
+        info(req.responseText);
+      } else {
+        var msg = resp.total + " records (" + resp.time + ")";
+        info(msg + " rendering ...");
+
+        var html = "<h1>Result</h1><table style='width:100%'>";
+        for (var i = 0; i < resp.body.length; i++) {
+          var t = resp.body[i];
+
+          html += "<tr>";
+          for (var j = 0; j < t.length; j++) {
+            html += "<td>" + t[j] + "</td>";
+          }
+          html += "</tr>";
+        }
+        html += "</table>";
+        $("table").innerHTML = html;
+        info(msg);
+      }
+    }
+    </script>
+  </head>
   <body>
     <h1>Query</h1>
-    <form method="POST" action="/console">
-      <input name="query" type="text" spellcheck="false" value="{{html .Query}}" size="120"></input>
-      <input name="run" type="submit" value="Run"></input>
-    </form>
-
-    {{if .Time}}
-    <h1>Stats</h1>
-    <p>{{.Time}} {{len .Body}} records</p>
-    {{end}}
-
-    {{if .Error}}
-    <h1>Error</h1>
-    <p style="color:red">{{.Error}}</p>
-    {{end}}
-
-    {{if len .Body}}
-    <h1>Results</h1>
-    <table width="100%">
-      {{range .Body}}<tr>{{range .}}<td>{{.}}</td>{{end}}</tr>
-      {{end}}
-    </table>
-    {{end}}
+    <input id="query" type="text" spellcheck="false" size="120"></input>
+    <input type="button" value="Run" onclick="query();"></input>
+    <div id="info"></div>
+    <div id="table"></div>
   </body>
 </html>`
 
 func webFail(w http.ResponseWriter, msg string, args ...interface{}) {
 	msg = fmt.Sprintf(msg, args...)
+	msg = fmt.Sprintf(`{"error": %v}`, strconv.Quote(msg))
 	http.Error(w, msg, http.StatusInternalServerError)
 	log.Print(msg)
 }
 
-func readJSON(r *http.Request, data interface{}) *ParseError {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("failed to read json: %v", err)
-		return NewError(-1, -1, "failed to read json")
-	}
-
-	err = json.Unmarshal(body, data)
-	if err != nil {
-		log.Printf("failed to unmarshal json: %v", err)
-		return NewError(-1, -1, "failed to unmarshal json")
-	}
-
-	return nil
+func (c Console) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	io.WriteString(w, QueryPage)
 }
 
-func writeJSON(w http.ResponseWriter, data interface{}) *ParseError {
-	msg, err := json.Marshal(data)
-	if err != nil {
-		log.Printf("failed to marshal json: %v", err)
-		return NewError(-1, -1, "failed to marshal json")
-	}
-
-	w.Header().Add("Content-Type", "application/json")
-	_, err = w.Write(msg)
-	if err != nil {
-		log.Printf("failed to write json response: %v", err)
-		return NewError(-1, -1, "failed to write json response")
-	}
-
-	return nil
-}
-
-func (wq WebQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	store := Store(wq)
-	var obj struct {
-		Query string
-		Error error
-		Body  []Tuple
-		Time  time.Duration
-	}
+func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
-		if err := r.ParseForm(); err != nil {
-			webFail(w, "invalid form submission: %v", err)
+		dec := json.NewDecoder(r.Body)
+
+		var req struct {
+			Query string `json:"query"`
+			Limit int    `json:"limit"`
+		}
+		if err := dec.Decode(&req); err != nil {
+			webFail(w, "invalid request object: %v", err)
 			return
 		}
 
-		obj.Query = r.Form.Get("query")
-		mem, load, comp, err := Parse(obj.Query, store)
-		if err != nil {
-			obj.Error = fmt.Errorf(err.Error)
-		} else {
-			t := time.Now()
-			for t := range store.Run(mem, load, comp) {
-				obj.Body = append(obj.Body, t)
-			}
-			obj.Time = time.Now().Sub(t)
-
-			log.Printf("%v for %v", obj.Time, obj.Query)
-		}
-	}
-
-	t := template.Must(template.New("QueryPage").Parse(QueryPage))
-	if err := t.Execute(w, obj); err != nil {
-		webFail(w, "failed to execute template: %v", err)
-		return
-	}
-}
-
-func (rq RawQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	store := Store(rq)
-	if r.Method == "POST" {
-		start := time.Now()
-		var req QueryReq
-		if err := readJSON(r, &req); err != nil {
-			writeJSON(w, err)
-		}
-
-		mem, load, comp, err := Parse(req.Query, store)
-		if err != nil {
-			log.Printf("failed to parse '%v': %v", req.Query, err)
-			writeJSON(w, err)
-			return
-		}
-
-		body := make([]Tuple, 0)
-		count := 0
-		for t := range store.Run(mem, load, comp) {
-			if req.Limit < 0 || count < req.Limit {
-				body = append(body, t)
-			}
-			count++
-		}
-
-		resp := &QueryResp{Total: count, Time: time.Now().Sub(start).String(), Body: body}
-		writeJSON(w, resp)
-
-		log.Printf("%v for %v", resp.Time, req.Query)
+		Group(fq).FullRun(w, req.Query, req.Limit)
 	} else {
 		webFail(w, "%v unsupported method %v", r.URL, r.Method)
-		return
 	}
 }
 
-type Profiler struct {
+func (pq PartQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		query, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			webFail(w, "failed to read query: %v", err)
+			return
+		}
+
+		Group(pq).PartRun(w, string(query), -1)
+	} else {
+		webFail(w, "%v unsupported method %v", r.URL, r.Method)
+	}
 }
 
 // See pprof_remote_servers.html bundled with the gperftools.
-func (p *Profiler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (p Profiler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "cmdline":
 		for _, arg := range os.Args {

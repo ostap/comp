@@ -15,7 +15,7 @@ type Head map[string]int
 type Expr func(m *Mem, t Tuple) Value
 
 func main() {
-	bind := flag.String("bind", "localhost:9090", "bind address")
+	bind := flag.String("bind", ":9090", "bind address")
 	data := flag.String("data", "", "list of data files")
 	peers := flag.String("peers", "", "list of peers (excluding self)")
 	flag.Parse()

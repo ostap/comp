@@ -37,6 +37,7 @@ func (g Group) FullRun(w io.Writer, query string, limit int) {
 		msg := strconv.Quote(err.Error)
 		fmt.Fprintf(w, `{"error": %v, "line": %v, "column": %v}`, msg, err.Line, err.Column)
 		log.Printf("parse error %+v: %v", err, query)
+		return
 	}
 
 	out := make(Body, 1024)
@@ -89,6 +90,7 @@ func (g Group) PartRun(w io.Writer, query string, limit int) {
 		msg := strconv.Quote(err.Error)
 		fmt.Fprintf(w, `{"error": %v, "line": %v, "column": %v}`, msg, err.Line, err.Column)
 		log.Printf("parse error %+v: %v", err, query)
+		return
 	}
 
 	enc := gob.NewEncoder(w)

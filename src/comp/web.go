@@ -107,7 +107,15 @@ func (pq PartQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		Group(pq).PartRun(w, string(query), -1)
+		limit := -1
+		if str := r.URL.Query().Get("limit"); str != "" {
+			num, err := strconv.ParseInt(str, 10, 64)
+			if err == nil {
+				limit = int(num)
+			}
+		}
+
+		Group(pq).PartRun(w, string(query), limit)
 	} else {
 		webFail(w, "%v unsupported method %v", r.URL, r.Method)
 	}

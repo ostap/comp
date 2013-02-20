@@ -85,7 +85,7 @@ func (g Group) FullRun(w io.Writer, query string, limit int) {
 
 	duration := time.Now().Sub(start)
 	fmt.Fprintf(w, ` ], "total": %v, "found": %v, "time": "%vms"}`, <-total, found, duration.Nanoseconds()/1000000)
-	log.Printf("full run %v for %v", duration, query)
+	log.Printf("full run %v (limit %v) for %v", duration, limit, query)
 }
 
 func (g Group) PartRun(w io.Writer, query string, limit int) {
@@ -102,24 +102,30 @@ func (g Group) PartRun(w io.Writer, query string, limit int) {
 	enc := gob.NewEncoder(w)
 	out := make(Body, 1024)
 	ctl := make(chan int)
+	total := make(chan int)
 	go g.local.Run(mem, load, comp, out, ctl)
-	for {
-		select {
-		case t := <-out:
-			enc.Encode(t)
-		case total := <-ctl:
-			enc.Encode(Tuple{float64(total)})
-			goto end
-		}
-	}
+	go func() {
+		count := <-ctl
+		close(out)
+		total <- count
+	}()
 
-end:
+	found := 0
+	for t := range out {
+		if limit < 0 || found < limit {
+			enc.Encode(t)
+		}
+		found++
+	}
+	enc.Encode(Tuple{float64(<-total)})
+
 	duration := time.Now().Sub(start)
-	log.Printf("part run %v for %v", duration, query)
+	log.Printf("part run %v (limit %v) for %v", duration, limit, query)
 }
 
 func (p Peer) PartRun(query string, limit int, out Body, ctl chan int) {
-	resp, err := http.Post(string(p), "application/x-comp-query", strings.NewReader(query))
+	url := fmt.Sprintf("%v?limit=%d", p, limit)
+	resp, err := http.Post(url, "application/x-comp-query", strings.NewReader(query))
 	if err != nil {
 		log.Printf("remote call failed: %v", err)
 		ctl <- -1

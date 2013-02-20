@@ -40,7 +40,7 @@ const QueryPage = `<!doctype html>
       if (resp.error) {
         info(req.responseText);
       } else {
-        var msg = resp.total + " records (" + resp.time + ")";
+        var msg = "processed " + resp.total + " records, found " + resp.found + " (" + resp.time + ")";
         info(msg + " rendering ...");
 
         var html = "<h1>Result</h1><table style='width:100%'>";

@@ -42,23 +42,29 @@ func (g Group) FullRun(w io.Writer, query string, limit int) {
 
 	out := make(Body, 1024)
 	ctl := make(chan int, len(g.peers)+1)
+	total := make(chan int, 1)
 
 	go g.local.Run(mem, load, comp, out, ctl)
 	for _, p := range g.peers {
 		go p.PartRun(query, limit, out, ctl)
 	}
 	go func() {
+		sum := 0
 		for i := 0; i < len(g.peers)+1; i++ {
-			<-ctl
+			cnt := <-ctl
+			if cnt >= 0 {
+				sum += cnt
+			}
 		}
 		close(out)
+		total <- sum
 	}()
 
 	fmt.Fprintf(w, `{"body": [ `)
-	total := 0
+	found := 0
 	for t := range out {
-		if limit < 0 || total < limit {
-			if total == 0 {
+		if limit < 0 || found < limit {
+			if found == 0 {
 				fmt.Fprintf(w, "[ ")
 			} else {
 				fmt.Fprintf(w, ", [ ")
@@ -74,11 +80,11 @@ func (g Group) FullRun(w io.Writer, query string, limit int) {
 
 			fmt.Fprintf(w, " ]")
 		}
-		total++
+		found++
 	}
 
 	duration := time.Now().Sub(start)
-	fmt.Fprintf(w, ` ], "total": %v, "time": "%v"}`, total, duration)
+	fmt.Fprintf(w, ` ], "total": %v, "found": %v, "time": "%vms"}`, <-total, found, duration.Nanoseconds()/1000000)
 	log.Printf("full run %v for %v", duration, query)
 }
 
@@ -101,7 +107,8 @@ func (g Group) PartRun(w io.Writer, query string, limit int) {
 		select {
 		case t := <-out:
 			enc.Encode(t)
-		case <-ctl:
+		case total := <-ctl:
+			enc.Encode(Tuple{float64(total)})
 			goto end
 		}
 	}
@@ -119,14 +126,23 @@ func (p Peer) PartRun(query string, limit int, out Body, ctl chan int) {
 	} else {
 		defer resp.Body.Close()
 		dec := gob.NewDecoder(resp.Body)
-		for total := 0; ; total++ {
+		var prev Tuple = nil
+		for {
 			var t Tuple
 			if err := dec.Decode(&t); err != nil {
+				total := 0
+				if err == io.EOF && len(prev) == 1 {
+					total = int(Num(prev[0]))
+				}
 				ctl <- total
 				break
 			}
 
-			out <- t
+			if prev != nil {
+				out <- prev
+			}
+
+			prev = t
 		}
 	}
 }

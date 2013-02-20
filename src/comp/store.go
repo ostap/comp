@@ -59,10 +59,11 @@ func (s Store) Run(mem *Mem, load string, comp Comp, out Body, ctl chan int) {
 
 	workers := len(s.workers[load])
 	go func() {
+		total := 0
 		for i := 0; i < workers; i++ {
-			<-closer
+			total += <-closer
 		}
-		ctl <- 1
+		ctl <- total
 	}()
 }
 
@@ -72,11 +73,13 @@ func (s Store) Declare(m *Mem, prefix, name string) {
 
 func worker(wq WorkQueue, part []Tuple) {
 	for w := range wq {
-		for _, t := range part {
+		var t Tuple
+		var i int
+		for i, t = range part {
 			if t = w.comp(w.mem, t); t != nil {
 				w.out <- t
 			}
 		}
-		w.closer <- 1
+		w.closer <- (i + 1)
 	}
 }

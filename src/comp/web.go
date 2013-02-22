@@ -93,7 +93,8 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		Group(fq).FullRun(w, req.Query, req.Limit)
+		// TODO: enable the limits after testing
+		Group(fq).FullRun(w, req.Query, 10)
 	} else {
 		webFail(w, "%v unsupported method %v", r.URL, r.Method)
 	}
@@ -107,6 +108,7 @@ func (pq PartQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		/* TODO: enable the limits after testing
 		limit := -1
 		if str := r.URL.Query().Get("limit"); str != "" {
 			num, err := strconv.ParseInt(str, 10, 64)
@@ -114,8 +116,9 @@ func (pq PartQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				limit = int(num)
 			}
 		}
+		*/
 
-		Group(pq).PartRun(w, string(query), limit)
+		Group(pq).PartRun(w, string(query), 10)
 	} else {
 		webFail(w, "%v unsupported method %v", r.URL, r.Method)
 	}

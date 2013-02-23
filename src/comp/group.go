@@ -41,23 +41,26 @@ func (g Group) FullRun(w io.Writer, query string, limit int) {
 	}
 
 	out := make(Body, 1024)
-	ctl := make(chan int, len(g.peers)+1)
-	total := make(chan int, 1)
+	stats := make(chan Stats, len(g.peers)+1)
+	result := make(chan Stats, 1)
 
-	go g.local.Run(mem, load, comp, out, ctl)
+	go func() {
+		total, found := g.local.Run(mem, load, comp, out)
+		stats <- Stats{total, found}
+	}()
 	for _, p := range g.peers {
-		go p.PartRun(query, limit, out, ctl)
+		go p.PartRun(query, limit, out, stats)
 	}
 	go func() {
-		sum := 0
+		total, found := 0, 0
 		for i := 0; i < len(g.peers)+1; i++ {
-			cnt := <-ctl
-			if cnt >= 0 {
-				sum += cnt
+			if s := <-stats; s != StatsFailed {
+				total += s.Total
+				found += s.Found
 			}
 		}
 		close(out)
-		total <- sum
+		result <- Stats{total, found}
 	}()
 
 	fmt.Fprintf(w, `{"body": [ `)
@@ -84,8 +87,11 @@ func (g Group) FullRun(w io.Writer, query string, limit int) {
 	}
 
 	duration := time.Now().Sub(start)
-	fmt.Fprintf(w, ` ], "total": %v, "found": %v, "time": "%vms"}`, <-total, found, duration.Nanoseconds()/1000000)
-	log.Printf("full run %v (limit %v) for %v", duration, limit, query)
+	millis := duration.Nanoseconds() / 1000 / 1000
+	info := <-result
+
+	fmt.Fprintf(w, ` ], "total": %v, "found": %v, "time": "%vms"}`, info.Total, info.Found, millis)
+	log.Printf("full run %v, limit %v, %+v, query %v", duration, limit, info, query)
 }
 
 func (g Group) PartRun(w io.Writer, query string, limit int) {
@@ -101,34 +107,34 @@ func (g Group) PartRun(w io.Writer, query string, limit int) {
 
 	enc := gob.NewEncoder(w)
 	out := make(Body, 1024)
-	ctl := make(chan int)
-	total := make(chan int)
-	go g.local.Run(mem, load, comp, out, ctl)
+	stats := make(chan Stats, 1)
 	go func() {
-		count := <-ctl
+		total, found := g.local.Run(mem, load, comp, out)
 		close(out)
-		total <- count
+		stats <- Stats{total, found}
 	}()
 
-	found := 0
+	sent := 0
 	for t := range out {
-		if limit < 0 || found < limit {
+		if limit < 0 || sent < limit {
 			enc.Encode(t)
+			sent++
 		}
-		found++
 	}
-	enc.Encode(Tuple{float64(<-total)})
+
+	info := <-stats
+	enc.Encode(Tuple{float64(info.Total), float64(info.Found)})
 
 	duration := time.Now().Sub(start)
-	log.Printf("part run %v (limit %v) for %v", duration, limit, query)
+	log.Printf("part run %v, limit %v, %+v, found %v, query %v", duration, limit, info, query)
 }
 
-func (p Peer) PartRun(query string, limit int, out Body, ctl chan int) {
+func (p Peer) PartRun(query string, limit int, out Body, stats chan Stats) {
 	url := fmt.Sprintf("%v?limit=%d", p, limit)
 	resp, err := http.Post(url, "application/x-comp-query", strings.NewReader(query))
 	if err != nil {
 		log.Printf("remote call failed: %v", err)
-		ctl <- -1
+		stats <- StatsFailed
 	} else {
 		defer resp.Body.Close()
 		dec := gob.NewDecoder(resp.Body)
@@ -136,11 +142,12 @@ func (p Peer) PartRun(query string, limit int, out Body, ctl chan int) {
 		for {
 			var t Tuple
 			if err := dec.Decode(&t); err != nil {
-				total := 0
-				if err == io.EOF && len(prev) == 1 {
+				total, found := 0, 0
+				if err == io.EOF && len(prev) == 2 {
 					total = int(Num(prev[0]))
+					found = int(Num(prev[1]))
 				}
-				ctl <- total
+				stats <- Stats{total, found}
 				break
 			}
 

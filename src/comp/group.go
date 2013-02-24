@@ -126,7 +126,7 @@ func (g Group) PartRun(w io.Writer, query string, limit int) {
 	enc.Encode(Tuple{float64(info.Total), float64(info.Found)})
 
 	duration := time.Now().Sub(start)
-	log.Printf("part run %v, limit %v, %+v, found %v, query %v", duration, limit, info, query)
+	log.Printf("part run %v, limit %v, %+v, query %v", duration, limit, info, query)
 }
 
 func (p Peer) PartRun(query string, limit int, out Body, stats chan Stats) {

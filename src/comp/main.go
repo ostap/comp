@@ -18,6 +18,7 @@ func main() {
 	bind := flag.String("bind", ":9090", "bind address")
 	data := flag.String("data", "", "list of data files")
 	peers := flag.String("peers", "", "list of peers (excluding self)")
+	cores := flag.Int("cores", runtime.NumCPU(), "how many cores to use locally")
 	flag.Parse()
 
 	if *data == "" {
@@ -27,7 +28,7 @@ func main() {
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	log.Printf("running on %d core(s)", runtime.NumCPU())
-	log.Printf("adjusting runtime (old value %d)", runtime.GOMAXPROCS(runtime.NumCPU()))
+	log.Printf("adjusting runtime to run on %d cores (old value %d)", *cores, runtime.GOMAXPROCS(*cores))
 
 	store := NewStore()
 	for _, fileName := range strings.Split(*data, ",") {
@@ -47,7 +48,7 @@ func main() {
 			continue
 		}
 
-		parts, err := ReadBody(head, fileName, runtime.NumCPU())
+		parts, err := ReadBody(head, fileName, *cores)
 		if err != nil {
 			log.Printf("cannot load %v: %v", fileName, err)
 			continue

@@ -94,7 +94,7 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Limit int    `json:"limit"`
 		}
 		if err := dec.Decode(&req); err != nil {
-			badReq(w, `{"error": "invalid request object: %v"}`, strconv.Quote(err.Error()))
+			badReq(w, `{"error": %v}`, strconv.Quote("invalid request object: "+err.Error()))
 			return
 		}
 
@@ -116,7 +116,7 @@ func (pq PartQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		query, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			badReq(w, `{"error": "failed to read query: %v"}`, strconv.Quote(err.Error()))
+			badReq(w, `{"error": %v}`, strconv.Quote("failed to read query: "+err.Error()))
 			return
 		}
 

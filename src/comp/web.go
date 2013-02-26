@@ -71,9 +71,14 @@ const QueryPage = `<!doctype html>
 
 func webFail(w http.ResponseWriter, msg string, args ...interface{}) {
 	msg = fmt.Sprintf(msg, args...)
-	msg = fmt.Sprintf(`{"error": %v}`, strconv.Quote(msg))
 	http.Error(w, msg, http.StatusInternalServerError)
 	log.Print(msg)
+}
+
+func badReq(w http.ResponseWriter, json string, args ...interface{}) {
+	json = fmt.Sprintf(json, args...)
+	http.Error(w, json, http.StatusBadRequest)
+	log.Print(json)
 }
 
 func (c Console) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +94,7 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Limit int    `json:"limit"`
 		}
 		if err := dec.Decode(&req); err != nil {
-			webFail(w, "invalid request object: %v", err)
+			badReq(w, `{"error": "invalid request object: %v"}`, strconv.Quote(err.Error()))
 			return
 		}
 
@@ -98,9 +103,12 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			req.Limit = 100
 		}
 
-		Group(fq).FullRun(w, req.Query, req.Limit)
+		if err := Group(fq).FullRun(w, req.Query, req.Limit); err != nil {
+			badReq(w, err.Error())
+			return
+		}
 	} else {
-		webFail(w, "%v unsupported method %v", r.URL, r.Method)
+		badReq(w, `{"error": "%v unsupported method %v"}`, r.URL, r.Method)
 	}
 }
 
@@ -108,7 +116,7 @@ func (pq PartQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		query, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			webFail(w, "failed to read query: %v", err)
+			badReq(w, `{"error": "failed to read query: %v"}`, strconv.Quote(err.Error()))
 			return
 		}
 
@@ -120,9 +128,11 @@ func (pq PartQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		Group(pq).PartRun(w, string(query), limit)
+		if err := Group(pq).PartRun(w, string(query), limit); err != nil {
+			badReq(w, err.Error())
+		}
 	} else {
-		webFail(w, "%v unsupported method %v", r.URL, r.Method)
+		badReq(w, `{"error": "%v unsupported method %v"}`, r.URL, r.Method)
 	}
 }
 

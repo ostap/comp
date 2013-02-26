@@ -29,15 +29,12 @@ func NewGroup(local Store, addrs []string) Group {
 	return Group{local, peers}
 }
 
-func (g Group) FullRun(w io.Writer, query string, limit int) {
+func (g Group) FullRun(w io.Writer, query string, limit int) error {
 	start := time.Now()
 
 	mem, load, comp, err := Parse(query, g.local)
 	if err != nil {
-		msg := strconv.Quote(err.Error)
-		fmt.Fprintf(w, `{"error": %v, "line": %v, "column": %v}`, msg, err.Line, err.Column)
-		log.Printf("parse error %+v: %v", err, query)
-		return
+		return fmt.Errorf(`{"error": %v, "line": %v, "column": %v}`, strconv.Quote(err.Error), err.Line, err.Column)
 	}
 
 	out := make(Body, 1024)
@@ -92,17 +89,15 @@ func (g Group) FullRun(w io.Writer, query string, limit int) {
 
 	fmt.Fprintf(w, ` ], "total": %v, "found": %v, "time": "%vms"}%v`, info.Total, info.Found, millis, "\n")
 	log.Printf("full run %v, limit %v, %+v, query %v", duration, limit, info, query)
+	return nil
 }
 
-func (g Group) PartRun(w io.Writer, query string, limit int) {
+func (g Group) PartRun(w io.Writer, query string, limit int) error {
 	start := time.Now()
 
 	mem, load, comp, err := Parse(query, g.local)
 	if err != nil {
-		msg := strconv.Quote(err.Error)
-		fmt.Fprintf(w, `{"error": %v, "line": %v, "column": %v}`, msg, err.Line, err.Column)
-		log.Printf("parse error %+v: %v", err, query)
-		return
+		return fmt.Errorf(`{"error": %v, "line": %v, "column": %v}`, strconv.Quote(err.Error), err.Line, err.Column)
 	}
 
 	enc := gob.NewEncoder(w)
@@ -127,6 +122,7 @@ func (g Group) PartRun(w io.Writer, query string, limit int) {
 
 	duration := time.Now().Sub(start)
 	log.Printf("part run %v, limit %v, %+v, query %v", duration, limit, info, query)
+	return nil
 }
 
 func (p Peer) PartRun(query string, limit int, out Body, stats chan Stats) {

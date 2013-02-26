@@ -90,7 +90,7 @@ func (g Group) FullRun(w io.Writer, query string, limit int) {
 	millis := duration.Nanoseconds() / 1000 / 1000
 	info := <-result
 
-	fmt.Fprintf(w, ` ], "total": %v, "found": %v, "time": "%vms"}`, info.Total, info.Found, millis)
+	fmt.Fprintf(w, ` ], "total": %v, "found": %v, "time": "%vms"}%v`, info.Total, info.Found, millis, "\n")
 	log.Printf("full run %v, limit %v, %+v, query %v", duration, limit, info, query)
 }
 

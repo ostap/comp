@@ -32,7 +32,7 @@ func NewGroup(local Store, addrs []string) Group {
 func (g Group) FullRun(w io.Writer, query string, limit int) error {
 	start := time.Now()
 
-	mem, load, comp, err := Parse(query, g.local)
+	mem, load, comp, head, err := Parse(query, g.local)
 	if err != nil {
 		return fmt.Errorf(`{"error": %v, "line": %v, "column": %v}`, strconv.Quote(err.Error), err.Line, err.Column)
 	}
@@ -60,7 +60,16 @@ func (g Group) FullRun(w io.Writer, query string, limit int) error {
 		result <- Stats{total, found}
 	}()
 
-	fmt.Fprintf(w, `{"body": [ `)
+	fmt.Fprintf(w, `{"head": [`)
+	for i, a := range head {
+		if i == 0 {
+			fmt.Fprintf(w, `"%v"`, a)
+		} else {
+			fmt.Fprintf(w, `, "%v"`, a)
+		}
+	}
+
+	fmt.Fprintf(w, `], "body": [ `)
 	found := 0
 	for t := range out {
 		if limit < 0 || found < limit {
@@ -95,7 +104,7 @@ func (g Group) FullRun(w io.Writer, query string, limit int) error {
 func (g Group) PartRun(w io.Writer, query string, limit int) error {
 	start := time.Now()
 
-	mem, load, comp, err := Parse(query, g.local)
+	mem, load, comp, _, err := Parse(query, g.local)
 	if err != nil {
 		return fmt.Errorf(`{"error": %v, "line": %v, "column": %v}`, strconv.Quote(err.Error), err.Line, err.Column)
 	}

@@ -12,7 +12,6 @@ import (
 type Tuple []Value
 type Body chan Tuple
 type Head map[string]int
-type Expr func(m *Mem, t Tuple) Value
 
 func main() {
 	bind := flag.String("bind", ":9090", "bind address")

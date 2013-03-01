@@ -9,7 +9,7 @@ func Reflect(m *Mem, t Tuple) Tuple {
 func Select(c Comp, e Expr) Comp {
 	return func(m *Mem, t Tuple) Tuple {
 		if t != nil {
-			if t = c(m, t); t != nil && Bool(e(m, t)) {
+			if t = c(m, t); t != nil && BoolEval(e, m, t) {
 				return t
 			}
 		}
@@ -24,7 +24,7 @@ func Return(c Comp, es []Expr) Comp {
 			if t = c(m, t); t != nil {
 				tuple := make(Tuple, len(es))
 				for i, e := range es {
-					tuple[i] = e(m, t)
+					tuple[i] = e.Eval(m, t)
 				}
 				return tuple
 			}

@@ -76,13 +76,13 @@ comprehension:
 	{
 		gLoad = $4
 		gComp = Return(Reflect, $2)
-		gHead = ExprHead($2)
+		gHead = ExprHead(gMem, $2)
 	}
     | '[' expression_list '|' generator ',' expression ']'
 	{
 		gLoad = $4
 		gComp = Return(Select(Reflect, $6), $2)
-		gHead = ExprHead($2)
+		gHead = ExprHead(gMem, $2)
 	}
     ;
 

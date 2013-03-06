@@ -21,7 +21,11 @@ func ExprValue(value Value) Expr {
 
 func ExprAttr(name string, pos int) Expr {
 	return Expr{name, func(m *Mem, t Tuple) Value {
-		return t[m.Attrs[pos]]
+		if idx := m.Attrs[pos]; idx > -1 {
+			return t[m.Attrs[pos]]
+		}
+
+		return t
 	}}
 }
 
@@ -101,13 +105,17 @@ func ExprFunc(name string, args []Expr) (expr Expr, err error) {
 	return
 }
 
-func ExprHead(exprs []Expr) []string {
-	head := make([]string, len(exprs))
-	for i, e := range exprs {
-		if idx := strings.Index(e.Name, "."); idx > 0 && (idx+1) < len(e.Name) {
-			head[i] = e.Name[idx+1:]
+func ExprHead(m *Mem, exprs []Expr) []string {
+	var head []string
+	for _, e := range exprs {
+		if e.Name == "" {
+			head = append(head, e.Name)
+		} else if idx := strings.Index(e.Name, "."); idx > 0 && (idx+1) < len(e.Name) {
+			head = append(head, e.Name[idx+1:])
 		} else {
-			head[i] = e.Name
+			for _, a := range m.Head(e.Name) {
+				head = append(head, a)
+			}
 		}
 	}
 

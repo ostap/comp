@@ -79,11 +79,15 @@ func (g Group) FullRun(w io.Writer, query string, limit int) error {
 				fmt.Fprintf(w, ", [ ")
 			}
 
-			for i, v := range t {
-				if i == 0 {
-					fmt.Fprintf(w, Quote(v))
-				} else {
-					fmt.Fprintf(w, ", %v", Quote(v))
+			pos := 0
+			for _, v := range t {
+				for _, a := range Expand(v) {
+					if pos != 0 {
+						fmt.Fprintf(w, ", ")
+					}
+
+					fmt.Fprintf(w, Quote(a))
+					pos++
 				}
 			}
 

@@ -12,8 +12,8 @@ Here is how to build and run the binary:
 $ go tool yacc -o src/comp/y.go -p "comp_" src/comp/grammar.y
 $ go test comp
 $ go install comp
-$ comp -bind :9090 -data geonames.txt,zipcodes.txt
-$ lynx localhost:9090
+$ comp -data geonames.txt,zipcodes.txt
+$ open http://localhost:9090/console
 ```
 
 Distributed mode:

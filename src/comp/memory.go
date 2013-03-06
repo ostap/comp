@@ -10,12 +10,13 @@ type Mem struct {
 
 	regexps  []*regexp.Regexp // regular expressions used by the query
 	patterns []string         // patterns of the regular expressions
+	heads    map[string]Head  // declared bindings, e.g. a <- geonames
 	posIdx   map[string]int   // attribute positions (index in m.attrs)
 	posOk    map[string]bool  // status of attribute declarationis
 }
 
 func NewMem() *Mem {
-	return &Mem{posIdx: make(map[string]int), posOk: make(map[string]bool)}
+	return &Mem{heads: make(map[string]Head), posIdx: make(map[string]int), posOk: make(map[string]bool)}
 }
 
 // AttrPos returns the attribute position (an index in m.Attrs).
@@ -65,6 +66,25 @@ func (m *Mem) Declare(name string, head Head) {
 		m.Attrs[pos] = idx
 		m.posOk[ident] = true
 	}
+
+	pos := m.findAttr(name)
+	m.Attrs[pos] = -1
+	m.posOk[name] = true
+	m.heads[name] = head
+}
+
+func (m *Mem) Head(name string) []string {
+	head := m.heads[name]
+	if head == nil {
+		return nil
+	}
+
+	res := make([]string, len(head))
+	for k, v := range head {
+		res[v] = k
+	}
+
+	return res
 }
 
 // BadAttrs returns all attribute identifiers which are not known (e.g. were not m.Declare()).

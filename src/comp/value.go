@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"strconv"
@@ -20,6 +21,8 @@ func Bool(v Value) bool {
 		return value != 0
 	case string:
 		return value != ""
+	case Tuple:
+		return true
 	}
 
 	return false
@@ -39,6 +42,8 @@ func Num(v Value) float64 {
 	case string:
 		res, _ := strconv.ParseFloat(value, 64)
 		return res
+	case Tuple:
+		return float64(len(value))
 	}
 
 	return math.NaN()
@@ -50,6 +55,18 @@ func Str(v Value) string {
 		return fmt.Sprintf("%v", value)
 	case string:
 		return value
+	case Tuple:
+		buf := new(bytes.Buffer)
+		fmt.Fprintf(buf, "{")
+		for i, a := range value {
+			if i == 0 {
+				fmt.Fprintf(buf, "$%d: %v", i, Quote(a))
+			} else {
+				fmt.Fprintf(buf, ", $%d: %v", i, Quote(a))
+			}
+		}
+		fmt.Fprintf(buf, "}")
+		return buf.String()
 	}
 
 	return ""
@@ -62,6 +79,15 @@ func Quote(v Value) string {
 	}
 
 	return fmt.Sprintf("%v", v)
+}
+
+func Expand(v Value) Tuple {
+	t, isTuple := v.(Tuple)
+	if isTuple {
+		return t
+	}
+
+	return Tuple{v}
 }
 
 // TODO: check reflexivity, symmetry, transitivity
@@ -91,6 +117,20 @@ func Eq(l, r Value) bool {
 			return Bool(lv) == rv
 		case float64:
 			return Num(lv) == rv
+		}
+	case Tuple:
+		switch rv := r.(type) {
+		case Tuple:
+			if len(lv) != len(rv) {
+				return false
+			}
+
+			for i := 0; i < len(lv); i++ {
+				if lv[i] != rv[i] {
+					return false
+				}
+			}
+			return true
 		}
 	}
 

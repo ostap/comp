@@ -155,6 +155,8 @@ func (p Peer) PartRun(query string, limit int, out Body, stats chan Stats) {
 				if err == io.EOF && len(prev) == 2 {
 					total = int(Num(prev[0]))
 					found = int(Num(prev[1]))
+				} else {
+					out <- prev
 				}
 				stats <- Stats{total, found}
 				break
@@ -167,4 +169,8 @@ func (p Peer) PartRun(query string, limit int, out Body, stats chan Stats) {
 			prev = t
 		}
 	}
+}
+
+func init() {
+	gob.Register(Tuple{})
 }

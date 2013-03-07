@@ -98,11 +98,6 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// TODO: increase the limits after testing
-		if req.Limit < 0 || req.Limit > 100 {
-			req.Limit = 100
-		}
-
 		if err := Group(fq).FullRun(w, req.Query, req.Limit); err != nil {
 			badReq(w, err.Error())
 			return

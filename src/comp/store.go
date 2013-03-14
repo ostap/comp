@@ -1,13 +1,21 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
+	"os"
+	"path"
+	"regexp"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type Store struct {
-	heads map[string]Head
-	parts map[string][][]Tuple
+	head map[string]Head
+	body map[string]List
 }
 
 type Stats struct {
@@ -15,67 +23,182 @@ type Stats struct {
 	Found int
 }
 
+type line struct {
+	lineNo  int
+	lineStr string
+}
+
 var StatsFailed = Stats{-1, -1}
 
 func NewStore() Store {
-	return Store{make(map[string]Head), make(map[string][][]Tuple)}
+	return Store{make(map[string]Head), make(map[string]List)}
 }
 
 func (s Store) IsDef(name string) bool {
-	return s.heads[name] != nil
+	return s.head[name] != nil
 }
 
-func (s Store) Add(name string, head Head, parts [][]Tuple) {
-	recs := 0
-	info := ""
-	for i, p := range parts {
-		if i == 0 {
-			info = fmt.Sprintf("%v", len(p))
-		} else {
-			info = fmt.Sprintf("%v %v", info, len(p))
+func (s Store) Add(fileName string) error {
+	name := path.Base(fileName)
+	if dot := strings.Index(name, "."); dot > 0 {
+		name = name[:dot]
+	}
+
+	if !IsIdent(name) {
+		return fmt.Errorf("invalid file name: '%v' cannot be used as an identifier (ignoring)", name)
+	}
+
+	head, err := readHead(fileName)
+	if err != nil {
+		return fmt.Errorf("failed to load %v: %v", fileName, err)
+	}
+
+	body, err := readBody(head, fileName)
+	if err != nil {
+		return fmt.Errorf("failed to load %v: %v", fileName, err)
+	}
+
+	s.head[name] = head
+	s.body[name] = body
+
+	log.Printf("stored %v (recs %v)", name, len(body))
+	return nil
+}
+
+func (s Store) Alloc() *Mem {
+	mem := NewMem()
+	for k, v := range s.body {
+		mem.Store(k, v)
+	}
+
+	return mem
+}
+
+func IsIdent(s string) bool {
+	ident, _ := regexp.MatchString("^\\w+$", s)
+	return ident
+}
+
+func readHead(fileName string) (Head, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	buf := bufio.NewReader(file)
+	str, err := buf.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(Head)
+	for idx, attr := range strings.Split(str, "\t") {
+		attr = strings.Trim(attr, " \r\n")
+		if !IsIdent(attr) {
+			return nil, fmt.Errorf("invalid attribute name: '%v'", attr)
 		}
-		recs += len(p)
+		res[attr] = idx
 	}
 
-	s.heads[name] = head
-	s.parts[name] = parts
-
-	log.Printf("stored %v (recs %v | parts %v)", name, recs, info)
+	return res, nil
 }
 
-func (s Store) Run(mem *Mem, load string, comp Comp, out Body) (total, found int) {
-	// FIXME: concurrent map access
-	parts := s.parts[load]
-	stats := make(chan Stats, len(parts))
-
-	for _, part := range parts {
-		go worker(part, mem.Clone(), comp, out, stats)
+func readBody(head Head, fileName string) (List, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
 	}
+	defer file.Close()
 
-	total = 0
-	found = 0
-	for i := 0; i < len(parts); i++ {
-		info := <-stats
-		total += info.Total
-		found += info.Found
-	}
+	lines := make(chan line, 1024)
+	go func() {
+		buf := bufio.NewReader(file)
 
-	return
-}
+		for lineNo := 0; ; lineNo++ {
+			lineStr, _ := buf.ReadString('\n')
+			if len(lineStr) == 0 {
+				break
+			}
+			if lineNo == 0 {
+				continue
+			}
 
-func (s Store) Declare(m *Mem, prefix, name string) {
-	m.Declare(prefix, s.heads[name])
-}
-
-func worker(part []Tuple, mem *Mem, comp Comp, out Body, stats chan Stats) {
-	total, found := 0, 0
-	for _, t := range part {
-		if t = comp(mem, t); t != nil {
-			out <- t
-			found++
+			lines <- line{lineNo, lineStr}
 		}
-		total++
+		close(lines)
+	}()
+
+	tuples := make(Body, 1024)
+	ctl := make(chan int)
+
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go tabDelimParser(i, head, lines, tuples, ctl)
+	}
+	go func() {
+		for i := 0; i < runtime.NumCPU(); i++ {
+			<-ctl
+		}
+		close(tuples)
+	}()
+
+	ticker := time.NewTicker(1 * time.Second)
+	body := make(List, 0)
+
+	count := 0
+	stop := false
+	for !stop {
+		select {
+		case <-ticker.C:
+			log.Printf("loading %v (%d tuples)", fileName, count)
+		case t, ok := <-tuples:
+			if !ok {
+				stop = true
+				break
+			}
+
+			body = append(body, t)
+			count++
+		}
+	}
+	ticker.Stop()
+
+	return body, nil
+}
+
+func tabDelimParser(id int, h Head, in chan line, out Body, ctl chan int) {
+	head := make([]string, len(h))
+	for f, i := range h {
+		head[i] = f
 	}
 
-	stats <- Stats{total, found}
+	count := 0
+	for l := range in {
+		fields := strings.Split(l.lineStr[:len(l.lineStr)-1], "\t")
+		if len(fields) > len(head) {
+			log.Printf("line %d: truncating object (-%d fields)", l.lineNo, len(fields)-len(head))
+			fields = fields[:len(head)]
+		} else if len(fields) < len(head) {
+			log.Printf("line %d: missing fields, appending blank strings", l.lineNo)
+			for len(fields) < len(head) {
+				fields = append(fields, "")
+			}
+		}
+
+		obj := make(Object, len(head))
+		for i, s := range fields {
+			num, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				obj[head[i]] = String(s)
+			} else {
+				obj[head[i]] = Number(num)
+				count++
+			}
+		}
+
+		out <- obj
+	}
+
+	log.Printf("parser %d found %d numbers\n", id, count)
+	ctl <- 1
 }

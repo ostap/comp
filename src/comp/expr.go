@@ -8,37 +8,100 @@ import (
 
 type Expr struct {
 	Name string
-	Eval func(m *Mem, t Tuple) Value
+	Eval func(mem *Mem) Value
 }
 
 var BadExpr = Expr{"", nil}
 
-func ExprValue(value Value) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return value
+func ToBool(e Expr, m *Mem) bool {
+	return bool(e.Eval(m).Bool())
+}
+
+func ToNum(e Expr, m *Mem) float64 {
+	return float64(e.Eval(m).Number())
+}
+
+func ToStr(e Expr, m *Mem) string {
+	return string(e.Eval(m).String())
+}
+
+func ToList(e Expr, m *Mem) List {
+	return e.Eval(m).List()
+}
+
+func ToObject(e Expr, m *Mem) Object {
+	return e.Eval(m).Object()
+}
+
+func ExprConst(c Value) Expr {
+	return Expr{"", func(mem *Mem) Value {
+		return c
 	}}
 }
 
-func ExprAttr(name string, pos int) Expr {
-	return Expr{name, func(m *Mem, t Tuple) Value {
-		if idx := m.Attrs[pos]; idx > -1 {
-			return t[m.Attrs[pos]]
+func ExprLoad(name string) Expr {
+	return Expr{name, func(mem *Mem) Value {
+		return mem.Load(name)
+	}}
+}
+
+func ExprList(elems []Expr) Expr {
+	return Expr{"", func(mem *Mem) Value {
+		res := make(List, len(elems))
+		for i, e := range elems {
+			res[i] = e.Eval(mem)
 		}
 
-		return t
+		return res
 	}}
 }
 
-func ExprFunc(name string, args []Expr) (expr Expr, err error) {
+func ExprLoop(bind string, list Expr, op Expr) Expr {
+	return Expr{bind, func(mem *Mem) Value {
+		res := make(List, 0)
+		for _, v := range ToList(list, mem) {
+			mem.Store(bind, v)
+			if elem := op.Eval(mem); elem != nil {
+				res = append(res, elem)
+			}
+		}
+		return res
+	}}
+}
+
+func ExprObject(fields []Expr) Expr {
+	return Expr{"", func(mem *Mem) Value {
+		obj := make(Object, len(fields))
+		for _, f := range fields {
+			obj[f.Name] = f.Eval(mem)
+		}
+
+		return obj
+	}}
+}
+
+func (e Expr) Field(name string) Expr {
+	return Expr{name, func(mem *Mem) Value {
+		val := ToObject(e, mem)
+		res, ok := val[name]
+		if ok {
+			return res
+		}
+
+		return String("")
+	}}
+}
+
+func (e Expr) Call(args []Expr) (expr Expr, err error) {
 	expr = BadExpr
 	err = nil
 
-	switch name {
+	switch e.Name {
 	case "trunc":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{"", func(m *Mem, t Tuple) Value {
-				return math.Trunc(NumEval(e, m, t))
+			expr = Expr{"", func(m *Mem) Value {
+				return Number(math.Trunc(ToNum(e, m)))
 			}}
 		} else {
 			err = fmt.Errorf("trunc takes only 1 argument")
@@ -50,13 +113,13 @@ func ExprFunc(name string, args []Expr) (expr Expr, err error) {
 			lat2expr := args[2]
 			lon2expr := args[3]
 
-			expr = Expr{"", func(m *Mem, t Tuple) Value {
-				lat1 := NumEval(lat1expr, m, t)
-				lon1 := NumEval(lon1expr, m, t)
-				lat2 := NumEval(lat2expr, m, t)
-				lon2 := NumEval(lon2expr, m, t)
+			expr = Expr{"", func(m *Mem) Value {
+				lat1 := ToNum(lat1expr, m)
+				lon1 := ToNum(lon1expr, m)
+				lat2 := ToNum(lat2expr, m)
+				lon2 := ToNum(lon2expr, m)
 
-				return Dist(lat1, lon1, lat2, lon2)
+				return Number(Dist(lat1, lon1, lat2, lon2))
 			}}
 		} else {
 			err = fmt.Errorf("dist takes only 4 arguments")
@@ -64,8 +127,8 @@ func ExprFunc(name string, args []Expr) (expr Expr, err error) {
 	case "trim":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{"", func(m *Mem, t Tuple) Value {
-				return strings.Trim(StrEval(e, m, t), " \t\n\r")
+			expr = Expr{"", func(m *Mem) Value {
+				return String(strings.Trim(ToStr(e, m), " \t\n\r"))
 			}}
 		} else {
 			err = fmt.Errorf("trim takes only 1 argument")
@@ -73,8 +136,8 @@ func ExprFunc(name string, args []Expr) (expr Expr, err error) {
 	case "lower":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{"", func(m *Mem, t Tuple) Value {
-				return strings.ToLower(StrEval(e, m, t))
+			expr = Expr{"", func(m *Mem) Value {
+				return String(strings.ToLower(ToStr(e, m)))
 			}}
 		} else {
 			err = fmt.Errorf("lower takes only 1 argument")
@@ -82,8 +145,8 @@ func ExprFunc(name string, args []Expr) (expr Expr, err error) {
 	case "upper":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{"", func(m *Mem, t Tuple) Value {
-				return strings.ToUpper(StrEval(e, m, t))
+			expr = Expr{"", func(m *Mem) Value {
+				return String(strings.ToUpper(ToStr(e, m)))
 			}}
 		} else {
 			err = fmt.Errorf("upper takes only 1 argument")
@@ -92,146 +155,117 @@ func ExprFunc(name string, args []Expr) (expr Expr, err error) {
 		if len(args) == 2 {
 			se := args[0]
 			te := args[1]
-			expr = Expr{"", func(m *Mem, t Tuple) Value {
-				return Fuzzy(StrEval(se, m, t), StrEval(te, m, t))
+			expr = Expr{"", func(m *Mem) Value {
+				return Number(Fuzzy(ToStr(se, m), ToStr(te, m)))
 			}}
 		} else {
 			err = fmt.Errorf("fuzzy takes only 2 arguments")
 		}
 	default:
-		err = fmt.Errorf("unknown function %v(%d)", name, len(args))
+		err = fmt.Errorf("unknown function %v(%d)", e.Name, len(args))
 	}
 
 	return
 }
 
-func ExprHead(m *Mem, exprs []Expr) []string {
-	var head []string
-	for _, e := range exprs {
-		if e.Name == "" {
-			head = append(head, e.Name)
-		} else if idx := strings.Index(e.Name, "."); idx > 0 && (idx+1) < len(e.Name) {
-			head = append(head, e.Name[idx+1:])
-		} else {
-			for _, a := range m.Head(e.Name) {
-				head = append(head, a)
-			}
-		}
-	}
-
-	return head
-}
-
-func BoolEval(e Expr, m *Mem, t Tuple) bool {
-	return Bool(e.Eval(m, t))
-}
-
-func NumEval(e Expr, m *Mem, t Tuple) float64 {
-	return Num(e.Eval(m, t))
-}
-
-func StrEval(e Expr, m *Mem, t Tuple) string {
-	return Str(e.Eval(m, t))
-}
-
 func (e Expr) Not() Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return !BoolEval(e, m, t)
+	return Expr{"", func(m *Mem) Value {
+		return Bool(!ToBool(e, m))
 	}}
 }
 
 func (e Expr) Neg() Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return -NumEval(e, m, t)
+	return Expr{"", func(m *Mem) Value {
+		return Number(-ToNum(e, m))
 	}}
 }
 
 func (e Expr) Pos() Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return +NumEval(e, m, t)
+	return Expr{"", func(m *Mem) Value {
+		return Number(+ToNum(e, m))
 	}}
 }
 
 func (l Expr) Mul(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return NumEval(l, m, t) * NumEval(r, m, t)
+	return Expr{"", func(m *Mem) Value {
+		return Number(ToNum(l, m) * ToNum(r, m))
 	}}
 }
 
 func (l Expr) Div(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return NumEval(l, m, t) / NumEval(r, m, t)
+	return Expr{"", func(m *Mem) Value {
+		return Number(ToNum(l, m) / ToNum(r, m))
 	}}
 }
 
 func (l Expr) Add(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return NumEval(l, m, t) + NumEval(r, m, t)
+	return Expr{"", func(m *Mem) Value {
+		return Number(ToNum(l, m) + ToNum(r, m))
 	}}
 }
 
 func (l Expr) Sub(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return NumEval(l, m, t) - NumEval(r, m, t)
+	return Expr{"", func(m *Mem) Value {
+		return Number(ToNum(l, m) - ToNum(r, m))
 	}}
 }
 
 func (l Expr) Cat(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return StrEval(l, m, t) + StrEval(r, m, t)
+	return Expr{"", func(m *Mem) Value {
+		return String(ToStr(l, m) + ToStr(r, m))
 	}}
 }
 
-func (l Expr) LT(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return NumEval(l, m, t) < NumEval(r, m, t)
+func (l Expr) Less(r Expr) Expr {
+	return Expr{"", func(m *Mem) Value {
+		return Bool(ToNum(l, m) < ToNum(r, m))
 	}}
 }
 
-func (l Expr) GT(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return NumEval(l, m, t) > NumEval(r, m, t)
+func (l Expr) Greater(r Expr) Expr {
+	return Expr{"", func(m *Mem) Value {
+		return Bool(ToNum(l, m) > ToNum(r, m))
 	}}
 }
 
-func (l Expr) LTE(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return NumEval(l, m, t) <= NumEval(r, m, t)
+func (l Expr) LessEq(r Expr) Expr {
+	return Expr{"", func(m *Mem) Value {
+		return Bool(ToNum(l, m) <= ToNum(r, m))
 	}}
 }
 
-func (l Expr) GTE(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return NumEval(l, m, t) >= NumEval(r, m, t)
+func (l Expr) GreaterEq(r Expr) Expr {
+	return Expr{"", func(m *Mem) Value {
+		return Bool(ToNum(l, m) >= ToNum(r, m))
 	}}
 }
 
 func (l Expr) Eq(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return Eq(l.Eval(m, t), r.Eval(m, t))
+	return Expr{"", func(m *Mem) Value {
+		return l.Eval(m).Equals(r.Eval(m))
 	}}
 }
 
 func (l Expr) NotEq(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return !Eq(l.Eval(m, t), r.Eval(m, t))
+	return Expr{"", func(m *Mem) Value {
+		return Bool(!l.Eval(m).Equals(r.Eval(m)))
 	}}
 }
 
 func (e Expr) Match(re int) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return m.MatchString(re, StrEval(e, m, t))
+	return Expr{"", func(m *Mem) Value {
+		return Bool(m.MatchString(re, ToStr(e, m)))
 	}}
 }
 
 func (l Expr) And(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return BoolEval(l, m, t) && BoolEval(r, m, t)
+	return Expr{"", func(m *Mem) Value {
+		return Bool(ToBool(l, m) && ToBool(r, m))
 	}}
 }
 
 func (l Expr) Or(r Expr) Expr {
-	return Expr{"", func(m *Mem, t Tuple) Value {
-		return BoolEval(l, m, t) || BoolEval(r, m, t)
+	return Expr{"", func(m *Mem) Value {
+		return Bool(ToBool(l, m) || ToBool(r, m))
 	}}
 }

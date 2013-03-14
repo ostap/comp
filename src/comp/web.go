@@ -19,8 +19,7 @@ import (
 
 type Console int
 type Profiler int
-type FullQuery Group
-type PartQuery Group
+type FullQuery Store
 
 const QueryPage = `<!doctype html>
 <html>
@@ -29,43 +28,49 @@ const QueryPage = `<!doctype html>
     <script type="text/javascript">
     function $(id) { return document.getElementById(id); }
     function info(msg) { $("info").innerHTML = msg; }
-    function query() {
+    function run() {
       info("processing ...");
       var req = new XMLHttpRequest();
       req.open("POST", "/full", false);
-      req.send(JSON.stringify({ query: $("query").value, limit: -1 }));
+      req.send(JSON.stringify({ expr: $("expr").value, limit: -1 }));
 
       info("parsing ...");
       var resp = JSON.parse(req.responseText);
       if (resp.error) {
         info(req.responseText);
       } else {
-        var msg = "processed " + resp.total + " records, found " + resp.found + " (" + resp.time + ")";
-        info(msg + " rendering ...");
+        info(resp.time);
+        var html = "<h1>Result</h1>";
+        if (Array.isArray(resp.result)) {
+          html += "<table style='width:100%'>";
+          for (var i = 0; i < resp.result.length; i++) {
+            var elem = resp.result[i];
 
-        var html = "<h1>Result</h1><table style='width:100%'>";
-        for (var i = 0; i < resp.body.length; i++) {
-          var t = resp.body[i];
-
-          html += "<tr>";
-          for (var j = 0; j < t.length; j++) {
-            html += "<td>" + t[j] + "</td>";
+            html += "<tr>";
+            for (var k in elem) {
+              html += "<td>" + elem[k] + "</td>";
+            }
+            html += "</tr>";
           }
-          html += "</tr>";
+          html += "</table>";
+        } else {
+          html += JSON.stringify(resp.result);
         }
-        html += "</table>";
-        $("table").innerHTML = html;
-        info(msg);
+
+        $("result").innerHTML = html;
       }
+      return false;
     }
     </script>
   </head>
   <body>
-    <h1>Query</h1>
-    <input id="query" type="text" spellcheck="false" size="120"></input>
-    <input type="button" value="Run" onclick="query();"></input>
+    <h1>Expression</h1>
+    <form name="expression" method="POST" onsubmit="return run();">
+      <input id="expr" type="text" spellcheck="false" size="120" autofocus></input>
+      <input type="submit" value="Run"></input>
+    </form>
     <div id="info"></div>
-    <div id="table"></div>
+    <div id="result"></div>
   </body>
 </html>`
 
@@ -90,7 +95,7 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		dec := json.NewDecoder(r.Body)
 
 		var req struct {
-			Query string `json:"query"`
+			Expr  string `json:"expr"`
 			Limit int    `json:"limit"`
 		}
 		if err := dec.Decode(&req); err != nil {
@@ -98,34 +103,29 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := Group(fq).FullRun(w, req.Query, req.Limit); err != nil {
-			badReq(w, err.Error())
-			return
-		}
-	} else {
-		badReq(w, `{"error": "%v unsupported method %v"}`, r.URL, r.Method)
-	}
-}
+		start := time.Now()
 
-func (pq PartQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		query, err := ioutil.ReadAll(r.Body)
+		mem := Store(fq).Alloc()
+		expr, err := Compile(req.Expr, mem)
 		if err != nil {
-			badReq(w, `{"error": %v}`, strconv.Quote("failed to read query: "+err.Error()))
+			info, _ := json.Marshal(err)
+			badReq(w, string(info))
 			return
 		}
 
-		limit := 0
-		if str := r.URL.Query().Get("limit"); str != "" {
-			num, err := strconv.ParseInt(str, 10, 64)
-			if err == nil {
-				limit = int(num)
+		res := expr.Eval(mem)
+		fmt.Fprintf(w, `{"result": `)
+		if res != nil {
+			if err := res.Quote(w); err != nil {
+				log.Printf("failed to marshal result: %v", err)
 			}
+		} else {
+			fmt.Fprintf(w, "null")
 		}
 
-		if err := Group(pq).PartRun(w, string(query), limit); err != nil {
-			badReq(w, err.Error())
-		}
+		dur := time.Now().Sub(start)
+		fmt.Fprintf(w, `, "time": "%v"}`, dur)
+		log.Printf("%v for '%v'", dur, req.Expr)
 	} else {
 		badReq(w, `{"error": "%v unsupported method %v"}`, r.URL, r.Method)
 	}

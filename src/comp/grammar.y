@@ -21,13 +21,11 @@ func NewError(line, column int, msg string, args ...interface{}) *ParseError {
 
 var gMutex sync.Mutex
 
-var gStore Store
+var gDecls Decls
+var gMem   *Mem
 var gLex   *lexer
 
-var gMem   *Mem
-var gLoad  string
-var gComp  Comp
-var gHead  []string
+var gExpr  Expr
 var gError *ParseError
 %}
 
@@ -52,8 +50,6 @@ var gError *ParseError
 %token <str> IDENT
 %token <str> STRING
 
-%type <str>  identifier
-%type <str>  generator
 %type <expr> primary_expression
 %type <expr> postfix_expression
 %type <expr> unary_expression
@@ -63,93 +59,78 @@ var gError *ParseError
 %type <expr> equality_expression
 %type <expr> expression
 %type <args> expression_list
+%type <expr> object_field
+%type <args> object_field_list
+
+%start program
 
 %%
 
-comprehension:
+program:
+      expression
 	{
-		gLoad = ""
-		gComp = nil
-		gHead = nil
-	}
-    | '[' expression_list '|' generator ']'
-	{
-		gLoad = $4
-		gComp = Return(Reflect, $2)
-		gHead = ExprHead(gMem, $2)
-	}
-    | '[' expression_list '|' generator ',' expression ']'
-	{
-		gLoad = $4
-		gComp = Return(Select(Reflect, $6), $2)
-		gHead = ExprHead(gMem, $2)
-	}
-    ;
-
-generator:
-      IDENT TK_PROD IDENT
-	{
-		if !gStore.IsDef($3) {
-			parseError("unknown dataset %v", $3)
-		} else {
-			gStore.Declare(gMem, $1, $3)
-			$$ = $3
-		}
+		gExpr = $1
 	}
     ;
 
 primary_expression:
       STRING
 	{
-		$$ = ExprValue($1)
+		$$ = ExprConst(String($1))
 	}
     | NUMBER
 	{
-		$$ = ExprValue($1)
+		$$ = ExprConst(Number($1))
 	}
+    | IDENT
+	{
+		gDecls.Use($1)
+		$$ = ExprLoad($1)
+	}
+    | '{' object_field_list '}'
+	{
+		$$ = ExprObject($2)
+	}
+    | '[' expression_list ']'
+	{
+		$$ = ExprList($2)
+	}
+    | '[' expression_list '|' IDENT TK_PROD expression ']'
+	{
+		gDecls.Declare($4)
+		$$ = ExprLoop($4, $6, ExprObject($2))
+	}
+/*
+    | '[' expression_list '|' IDENT TK_PROD expression ',' expression ']'
+	{
+		$$ = ExprLoop($4, $6, ExprSelect($8).Return($2))
+	}
+*/
     | '(' expression ')'
 	{
 		$$ = $2
 	}
     ;
 
-identifier:
-      IDENT
+object_field_list:
+      object_field
 	{
-		$$ = $1
+		$$ = []Expr{$1}
 	}
-    | identifier '.' IDENT
+    | object_field_list ',' object_field
 	{
-		$$ = fmt.Sprintf("%v.%v", $1, $3)
+		$$ = append($1, $3)
 	}
     ;
 
-postfix_expression:
-      primary_expression
+object_field:
+      expression
 	{
 		$$ = $1
 	}
-    | identifier
+    | IDENT ':' expression
 	{
-		$$ = ExprAttr($1, gMem.AttrPos($1))
-	}
-    | identifier '(' ')'
-	{
-		expr, err := ExprFunc($1, nil)
-		if err == nil {
-			$$ = expr
-		} else {
-			parseError(err.Error())
-		}
-	}
-    | identifier '(' expression_list ')'
-	{
-		expr, err := ExprFunc($1, $3)
-		if err == nil {
-			$$ = expr
-		} else {
-			parseError(err.Error())
-		}
+		$$ = Expr{$1, $3.Eval}
 	}
     ;
 
@@ -161,6 +142,37 @@ expression_list:
     | expression_list ',' expression
 	{
 		$$ = append($1, $3)
+	}
+    ;
+
+postfix_expression:
+      primary_expression
+	{
+		$$ = $1
+	}
+    | postfix_expression '.' IDENT
+	{
+		$$ = $1.Field($3)
+	}
+    | postfix_expression '(' ')'
+	{
+		expr, err := $1.Call(nil)
+		if err == nil {
+			gDecls.Reset($1.Name)
+			$$ = expr
+		} else {
+			parseError(err.Error())
+		}
+	}
+    | postfix_expression '(' expression_list ')'
+	{
+		expr, err := $1.Call($3)
+		if err == nil {
+			gDecls.Reset($1.Name)
+			$$ = expr
+		} else {
+			parseError(err.Error())
+		}
 	}
     ;
 
@@ -224,19 +236,19 @@ relational_expression:
 	}
     | relational_expression '<' additive_expression
 	{
-		$$ = $1.LT($3)
+		$$ = $1.Less($3)
 	}
     | relational_expression '>' additive_expression
 	{
-		$$ = $1.GT($3)
+		$$ = $1.Greater($3)
 	}
     | relational_expression TK_LTEQ additive_expression
 	{
-		$$ = $1.LTE($3)
+		$$ = $1.LessEq($3)
 	}
     | relational_expression TK_GTEQ additive_expression
 	{
-		$$ = $1.GTE($3)
+		$$ = $1.GreaterEq($3)
 	}
     ;
 
@@ -281,10 +293,6 @@ expression:
 
 %%
 
-func parseError(s string, v ...interface{}) {
-	gError = NewError(gLex.scan.Pos().Line, gLex.scan.Pos().Column, s, v...)
-}
-
 type lexer struct {
 	scan scanner.Scanner
 }
@@ -300,7 +308,7 @@ func (l *lexer) Lex(yylval *comp_SymType) int {
 		return NUMBER
 	case scanner.String, scanner.RawString:
 		yylval.str = l.scan.TokenText()
-		yylval.str = yylval.str[1:len(yylval.str)-1]
+		yylval.str = yylval.str[1 : len(yylval.str)-1]
 		return STRING
 	case '<':
 		if l.scan.Peek() == '-' {
@@ -361,29 +369,30 @@ func (l *lexer) Error(s string) {
 	parseError(s)
 }
 
-func Parse(query string, store Store) (*Mem, string, Comp, []string, *ParseError) {
+func parseError(s string, v ...interface{}) {
+	gError = NewError(gLex.scan.Pos().Line, gLex.scan.Pos().Column, s, v...)
+}
+
+func Compile(expr string, mem *Mem) (Expr, *ParseError) {
 	gMutex.Lock()
 	defer gMutex.Unlock()
 
-	gStore = store
+	gMem = mem
+	gDecls = mem.Decls()
 	gLex = &lexer{}
 
-	gMem = NewMem()
-	gLoad = ""
-	gComp = nil
-	gHead = nil
 	gError = nil
+	gExpr = BadExpr
 
-	reader := strings.NewReader(query)
+	reader := strings.NewReader(expr)
 	gLex.scan.Init(reader)
 	comp_Parse(gLex)
 
 	if gError == nil {
-		bad := gMem.BadAttrs()
-		if len(bad) > 0 {
+		if bad := gDecls.Unknown(); len(bad) > 0 {
 			gError = NewError(0, 0, "unknown identifier(s): %v", bad)
 		}
 	}
 
-	return gMem, gLoad, gComp, gHead, gError
+	return gExpr, gError
 }

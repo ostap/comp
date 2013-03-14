@@ -36,15 +36,17 @@ var gError *ParseError
 	args []Expr
 }
 
-%token TK_EQ    // "=="
-%token TK_NEQ   // "!="
-%token TK_MATCH // "=~"
-%token TK_PROD  // "<-"
-%token TK_LTEQ  // "<="
-%token TK_GTEQ  // ">="
-%token TK_CAT   // "++"
-%token TK_AND   // "&&"
-%token TK_OR    // "||"
+%token EQ    // "=="
+%token NEQ   // "!="
+%token MATCH // "=~"
+%token PROD  // "<-"
+%token LTE   // "<="
+%token GTE   // ">="
+%token CAT   // "++"
+%token AND   // "&&"
+%token OR    // "||"
+%token TRUE  // "true"
+%token FALSE // "false"
 
 %token <num> NUMBER
 %token <str> IDENT
@@ -82,6 +84,14 @@ primary_expression:
 	{
 		$$ = ExprConst(Number($1))
 	}
+    | TRUE
+	{
+		$$ = ExprConst(Bool(true))
+	}
+    | FALSE
+	{
+		$$ = ExprConst(Bool(false))
+	}
     | IDENT
 	{
 		gDecls.Use($1)
@@ -95,13 +105,13 @@ primary_expression:
 	{
 		$$ = ExprList($2)
 	}
-    | '[' expression_list '|' IDENT TK_PROD expression ']'
+    | '[' expression_list '|' IDENT PROD expression ']'
 	{
 		gDecls.Declare($4)
 		$$ = ExprLoop($4, $6, ExprObject($2))
 	}
 /*
-    | '[' expression_list '|' IDENT TK_PROD expression ',' expression ']'
+    | '[' expression_list '|' IDENT PROD expression ',' expression ']'
 	{
 		$$ = ExprLoop($4, $6, ExprSelect($8).Return($2))
 	}
@@ -223,7 +233,7 @@ additive_expression:
 	{
 		$$ = $1.Sub($3)
 	}
-    | additive_expression TK_CAT multiplicative_expression
+    | additive_expression CAT multiplicative_expression
 	{
 		$$ = $1.Cat($3)
 	}
@@ -236,19 +246,19 @@ relational_expression:
 	}
     | relational_expression '<' additive_expression
 	{
-		$$ = $1.Less($3)
+		$$ = $1.LT($3)
 	}
     | relational_expression '>' additive_expression
 	{
-		$$ = $1.Greater($3)
+		$$ = $1.GT($3)
 	}
-    | relational_expression TK_LTEQ additive_expression
+    | relational_expression LTE additive_expression
 	{
-		$$ = $1.LessEq($3)
+		$$ = $1.LTE($3)
 	}
-    | relational_expression TK_GTEQ additive_expression
+    | relational_expression GTE additive_expression
 	{
-		$$ = $1.GreaterEq($3)
+		$$ = $1.GTE($3)
 	}
     ;
 
@@ -257,15 +267,15 @@ equality_expression:
 	{
 		$$ = $1
 	}
-    | equality_expression TK_EQ relational_expression
+    | equality_expression EQ relational_expression
 	{
 		$$ = $1.Eq($3)
 	}
-    | equality_expression TK_NEQ relational_expression
+    | equality_expression NEQ relational_expression
 	{
 		$$ = $1.NotEq($3)
 	}
-    | equality_expression TK_MATCH STRING
+    | equality_expression MATCH STRING
 	{
 		re, err := gMem.RegExp($3)
 		if err == nil {
@@ -281,11 +291,11 @@ expression:
 	{
 		$$ = $1
 	}
-    | expression TK_AND equality_expression
+    | expression AND equality_expression
 	{
 		$$ = $1.And($3)
 	}
-    | expression TK_OR equality_expression
+    | expression OR equality_expression
 	{
 		$$ = $1.Or($3)
 	}
@@ -301,7 +311,14 @@ func (l *lexer) Lex(yylval *comp_SymType) int {
 	tok := l.scan.Scan()
 	switch tok {
 	case scanner.Ident:
-		yylval.str = l.scan.TokenText()
+		ident := l.scan.TokenText()
+		if ident == "true" {
+			return TRUE
+		} else if ident == "false" {
+			return FALSE
+		}
+
+		yylval.str = ident
 		return IDENT
 	case scanner.Int, scanner.Float:
 		yylval.num, _ = strconv.ParseFloat(l.scan.TokenText(), 64)
@@ -313,49 +330,49 @@ func (l *lexer) Lex(yylval *comp_SymType) int {
 	case '<':
 		if l.scan.Peek() == '-' {
 			l.scan.Next()
-			return TK_PROD
+			return PROD
 		} else if l.scan.Peek() == '=' {
 			l.scan.Next()
-			return TK_LTEQ
+			return LTE
 		}
 		return '<'
 	case '>':
 		if l.scan.Peek() == '=' {
 			l.scan.Next()
-			return TK_GTEQ
+			return GTE
 		}
 		return '>'
 	case '=':
 		if l.scan.Peek() == '=' {
 			l.scan.Next()
-			return TK_EQ
+			return EQ
 		} else if l.scan.Peek() == '~' {
 			l.scan.Next()
-			return TK_MATCH
+			return MATCH
 		}
 		return '='
 	case '+':
 		if l.scan.Peek() == '+' {
 			l.scan.Next()
-			return TK_CAT
+			return CAT
 		}
 		return '+'
 	case '!':
 		if l.scan.Peek() == '=' {
 			l.scan.Next()
-			return TK_NEQ
+			return NEQ
 		}
 		return '!'
 	case '&':
 		if l.scan.Peek() == '&' {
 			l.scan.Next()
-			return TK_AND
+			return AND
 		}
 		return '&'
 	case '|':
 		if l.scan.Peek() == '|' {
 			l.scan.Next()
-			return TK_OR
+			return OR
 		}
 		return '|'
 	default:

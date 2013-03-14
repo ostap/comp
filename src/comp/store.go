@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+type Body chan Object
+
 type Store struct {
 	head map[string]Head
 	body map[string]List

@@ -216,25 +216,25 @@ func (l Expr) Cat(r Expr) Expr {
 	}}
 }
 
-func (l Expr) Less(r Expr) Expr {
+func (l Expr) LT(r Expr) Expr {
 	return Expr{"", func(m *Mem) Value {
 		return Bool(ToNum(l, m) < ToNum(r, m))
 	}}
 }
 
-func (l Expr) Greater(r Expr) Expr {
+func (l Expr) GT(r Expr) Expr {
 	return Expr{"", func(m *Mem) Value {
 		return Bool(ToNum(l, m) > ToNum(r, m))
 	}}
 }
 
-func (l Expr) LessEq(r Expr) Expr {
+func (l Expr) LTE(r Expr) Expr {
 	return Expr{"", func(m *Mem) Value {
 		return Bool(ToNum(l, m) <= ToNum(r, m))
 	}}
 }
 
-func (l Expr) GreaterEq(r Expr) Expr {
+func (l Expr) GTE(r Expr) Expr {
 	return Expr{"", func(m *Mem) Value {
 		return Bool(ToNum(l, m) >= ToNum(r, m))
 	}}

@@ -8,22 +8,15 @@ import (
 	"strings"
 )
 
-type Body chan Object
 type Head map[string]int
 
-func main() {
-	bind := flag.String("bind", ":9090", "bind address")
-	data := flag.String("data", "", "list of data files")
-	cores := flag.Int("cores", runtime.NumCPU(), "how many cores to use for computation")
-	flag.Parse()
-
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
+func Start(bind, data string, cores int) error {
 	log.Printf("running on %d core(s)", runtime.NumCPU())
-	log.Printf("adjusting runtime to run on %d cores (old value %d)", *cores, runtime.GOMAXPROCS(*cores))
+	log.Printf("adjusting runtime to run on %d cores (old value %d)", cores, runtime.GOMAXPROCS(cores))
 
 	store := NewStore()
-	if *data != "" {
-		for _, fileName := range strings.Split(*data, ",") {
+	if data != "" {
+		for _, fileName := range strings.Split(data, ",") {
 			if err := store.Add(fileName); err != nil {
 				log.Printf("%v", err)
 			}
@@ -42,5 +35,19 @@ func main() {
 	http.Handle("/full", FullQuery(store))
 	http.Handle("/console", Console(0))
 	http.Handle("/pprof/", http.StripPrefix("/pprof/", Profiler(0)))
-	log.Fatal(http.ListenAndServe(*bind, nil))
+
+	return http.ListenAndServe(bind, nil)
+}
+
+func main() {
+	bind := flag.String("bind", ":9090", "bind address")
+	data := flag.String("data", "", "list of data files")
+	cores := flag.Int("cores", runtime.NumCPU(), "how many cores to use for computation")
+	flag.Parse()
+
+	log.Fatal(Start(*bind, *data, *cores))
+}
+
+func init() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 }

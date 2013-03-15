@@ -34,7 +34,7 @@ func (m *Mem) MatchString(re int, s string) bool {
 	return m.regexps[re].MatchString(s)
 }
 
-func (m *Mem) Decls() Decls {
+func (m *Mem) Decls() *Decls {
 	decls := NewDecls()
 	for name, _ := range m.vars {
 		decls.Declare(name)

@@ -47,8 +47,12 @@ const QueryPage = `<!doctype html>
             var elem = resp.result[i];
 
             html += "<tr>";
-            for (var k in elem) {
-              html += "<td>" + elem[k] + "</td>";
+            if (typeof elem == "object") {
+              for (var k in elem) {
+                html += "<td>" + elem[k] + "</td>";
+              }
+            } else {
+              html += "<td>" + elem + "</td>";
             }
             html += "</tr>";
           }

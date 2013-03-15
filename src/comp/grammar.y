@@ -21,7 +21,7 @@ func NewError(line, column int, msg string, args ...interface{}) *ParseError {
 
 var gMutex sync.Mutex
 
-var gDecls Decls
+var gDecls *Decls
 var gMem   *Mem
 var gLex   *lexer
 
@@ -108,7 +108,11 @@ primary_expression:
     | '[' expression_list '|' IDENT PROD expression ']'
 	{
 		gDecls.Declare($4)
-		$$ = ExprLoop($4, $6, ExprObject($2))
+		if len($2) == 1 {
+			$$ = ExprLoop($4, $6, $2[0])
+		} else {
+			$$ = ExprLoop($4, $6, ExprObject($2))
+		}
 	}
 /*
     | '[' expression_list '|' IDENT PROD expression ',' expression ']'

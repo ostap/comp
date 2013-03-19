@@ -9,16 +9,6 @@ import (
 	"text/scanner"
 )
 
-type ParseError struct {
-	Line   int    `json:"line"`
-	Column int    `json:"column"`
-	Error  string `json:"error"`
-}
-
-func NewError(line, column int, msg string, args ...interface{}) *ParseError {
-	return &ParseError{Line: line, Column: column, Error: fmt.Sprintf(msg, args...)}
-}
-
 var gMutex sync.Mutex
 
 var gDecls *Decls
@@ -30,10 +20,11 @@ var gError *ParseError
 %}
 
 %union {
-	str  string
-	num  float64
-	expr Expr
-	args []Expr
+	str   string
+	num   float64
+	expr  Expr
+	exprs []Expr
+	loop  *Loop
 }
 
 %token EQ    // "=="
@@ -60,9 +51,10 @@ var gError *ParseError
 %type <expr> relational_expression
 %type <expr> equality_expression
 %type <expr> expression
-%type <args> expression_list
+%type <exprs> expression_list
 %type <expr> object_field
-%type <args> object_field_list
+%type <exprs> object_field_list
+%type <loop> generator_list
 
 %start program
 
@@ -105,24 +97,32 @@ primary_expression:
 	{
 		$$ = ExprList($2)
 	}
-    | '[' expression_list '|' IDENT PROD expression ']'
+    | '[' expression '|' generator_list ']'
 	{
-		gDecls.Declare($4)
-		if len($2) == 1 {
-			$$ = ExprLoop($4, $6, $2[0])
-		} else {
-			$$ = ExprLoop($4, $6, ExprObject($2))
-		}
+		gDecls.Strict(false)
+		$$ = ExprComp($4.Return($2))
 	}
-/*
-    | '[' expression_list '|' IDENT PROD expression ',' expression ']'
-	{
-		$$ = ExprLoop($4, $6, ExprSelect($8).Return($2))
-	}
-*/
     | '(' expression ')'
 	{
 		$$ = $2
+	}
+    ;
+
+generator_list:
+      IDENT PROD expression
+	{
+		gDecls.Strict(true)
+		gDecls.Declare($1)
+		$$ = ForEach($1, $3)
+	}
+    | generator_list ',' expression
+	{
+		$$ = $1.Select($3)
+	}
+    | generator_list ',' IDENT PROD expression
+	{
+		gDecls.Declare($3)
+		$$ = $1.Nest($3, $5)
 	}
     ;
 
@@ -306,6 +306,16 @@ expression:
     ;
 
 %%
+
+type ParseError struct {
+	Line   int    `json:"line"`
+	Column int    `json:"column"`
+	Error  string `json:"error"`
+}
+
+func NewError(line, column int, msg string, args ...interface{}) *ParseError {
+	return &ParseError{Line: line, Column: column, Error: fmt.Sprintf(msg, args...)}
+}
 
 type lexer struct {
 	scan scanner.Scanner

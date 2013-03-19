@@ -56,16 +56,9 @@ func ExprList(elems []Expr) Expr {
 	}}
 }
 
-func ExprLoop(bind string, list Expr, op Expr) Expr {
-	return Expr{bind, func(mem *Mem) Value {
-		res := make(List, 0)
-		for _, v := range ToList(list, mem) {
-			mem.Store(bind, v)
-			if elem := op.Eval(mem); elem != nil {
-				res = append(res, elem)
-			}
-		}
-		return res
+func ExprComp(loop *Loop) Expr {
+	return Expr{"", func(mem *Mem) Value {
+		return loop.Eval(mem)
 	}}
 }
 

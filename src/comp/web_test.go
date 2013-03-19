@@ -90,25 +90,35 @@ func ExampleFuncs() {
 }
 
 func ExampleComps() {
-	run("[ i | i <- [ 1, 2, 3 ]]")
-	run("[ i - 3 | i <- [ 1, 2, 3, 4, 5 ]]")
-	run("[ i + 1 | i <- [ j - 1 | j <- [ 1, 2, 3 ]]]")
-	run("[ {i: i + 1, j: i} | i <- [ j - 1 | j <- [ 1, 2, 3]]]")
+	run("[i | i <- [1, 2, 3]]")
+	run("[i - 3 | i <- [1, 2, 3, 4, 5]]")
+	run("[i + 1 | i <- [j - 1 | j <- [1, 2, 3]]]")
+	run("[{i: i + 1, j: i} | i <- [j - 1 | j <- [1, 2, 3]]]")
+	run("[i * j | i <- [1, 2, 3], j <- [10, 20]]")
+	run("[i * j | i <- [1, 2, 3], j <- [10, 20], i == j / 10]")
+	run("[i * j | i <- [1, 2, 3], trunc(i), j <- [10, 20]]")
 
 	// Output:
 	// [1,2,3]
 	// [-2,-1,0,1,2]
 	// [1,2,3]
 	// [{"i":1,"j":0},{"i":2,"j":1},{"i":3,"j":2}]
+	// [10,20,20,40,30,60]
+	// [10,40]
+	// [10,20,20,40,30,60]
 }
 
 func ExampleErrors() {
 	run("a")
 	run("a + b")
+	run("[i | j <- [1, 2, 3]]")
+	run("[i * j | i <- [0, 1, 2, 3], trunc(j), j <- [10, 20]]")
 
 	// Output:
 	// unknown identifier(s): [a]
 	// unknown identifier(s): [a b]
+	// unknown identifier(s): [i]
+	// unknown identifier(s): [j]
 }
 
 func run(query string) {

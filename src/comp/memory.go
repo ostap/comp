@@ -1,18 +1,16 @@
 package main
 
-import (
-	"regexp"
-)
+import "regexp"
 
 type Mem struct {
-	vars     map[string]Value
-	regexps  []*regexp.Regexp // regular expressions used by the query
-	patterns []string         // patterns of the regular expressions
-
+	vars    map[string]Value
+	heads   map[string]Head
+	fields  map[int64]Head
+	regexps []*regexp.Regexp
 }
 
 func NewMem() *Mem {
-	return &Mem{vars: make(map[string]Value)}
+	return &Mem{make(map[string]Value), make(map[string]Head), make(map[int64]Head), nil}
 }
 
 // RegExp returns the regular expression id (to be used in consequent m.MatchString() calls).
@@ -24,7 +22,6 @@ func (m *Mem) RegExp(pattern string) (int, error) {
 
 	pos := len(m.regexps)
 	m.regexps = append(m.regexps, re)
-	m.patterns = append(m.patterns, pattern)
 
 	return pos, nil
 }
@@ -43,10 +40,40 @@ func (m *Mem) Decls() *Decls {
 	return decls
 }
 
-func (m *Mem) Store(name string, v Value) {
+func (m *Mem) Bind(eid int64, name string, v Value) {
+	if head := m.fields[eid]; head != nil {
+		m.heads[name] = head
+	}
+
 	m.vars[name] = v
 }
 
-func (m *Mem) Load(name string) Value {
+func (m *Mem) Store(name string, v Value, h Head) {
+	m.vars[name] = v
+	m.heads[name] = h
+}
+
+func (m *Mem) SetHead(eid int64, h Head) {
+	m.fields[eid] = h
+}
+
+func (m *Mem) Load(eid int64, name string) Value {
+	if head := m.fields[eid]; head == nil {
+		if head = m.heads[name]; head != nil {
+			m.fields[eid] = head
+		}
+	}
+
 	return m.vars[name]
+}
+
+func (m *Mem) Field(eid int64, name string) int {
+	if head := m.fields[eid]; head != nil {
+		pos, ok := head[name]
+		if ok {
+			return pos
+		}
+	}
+
+	return -1
 }

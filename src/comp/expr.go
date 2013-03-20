@@ -4,14 +4,21 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync/atomic"
 )
 
 type Expr struct {
+	Id   int64
 	Name string
 	Eval func(mem *Mem) Value
 }
 
-var BadExpr = Expr{"", nil}
+var BadExpr = Expr{0, "", nil}
+var exprSeqNum int64 = 1
+
+func nextEID() int64 {
+	return atomic.AddInt64(&exprSeqNum, 1)
+}
 
 func ToBool(e Expr, m *Mem) bool {
 	return bool(e.Eval(m).Bool())
@@ -34,19 +41,20 @@ func ToObject(e Expr, m *Mem) Object {
 }
 
 func ExprConst(c Value) Expr {
-	return Expr{"", func(mem *Mem) Value {
+	return Expr{nextEID(), "", func(mem *Mem) Value {
 		return c
 	}}
 }
 
 func ExprLoad(name string) Expr {
-	return Expr{name, func(mem *Mem) Value {
-		return mem.Load(name)
+	id := nextEID()
+	return Expr{id, name, func(mem *Mem) Value {
+		return mem.Load(id, name)
 	}}
 }
 
 func ExprList(elems []Expr) Expr {
-	return Expr{"", func(mem *Mem) Value {
+	return Expr{nextEID(), "", func(mem *Mem) Value {
 		res := make(List, len(elems))
 		for i, e := range elems {
 			res[i] = e.Eval(mem)
@@ -57,16 +65,24 @@ func ExprList(elems []Expr) Expr {
 }
 
 func ExprComp(loop *Loop) Expr {
-	return Expr{"", func(mem *Mem) Value {
+	return Expr{nextEID(), "", func(mem *Mem) Value {
 		return loop.Eval(mem)
 	}}
 }
 
 func ExprObject(fields []Expr) Expr {
-	return Expr{"", func(mem *Mem) Value {
+	id := nextEID()
+	head := make(Head)
+	for i, f := range fields {
+		head[f.Name] = i
+	}
+
+	return Expr{id, "", func(mem *Mem) Value {
 		obj := make(Object, len(fields))
-		for _, f := range fields {
-			obj[f.Name] = f.Eval(mem)
+		mem.SetHead(id, head)
+
+		for i, f := range fields {
+			obj[i] = f.Eval(mem)
 		}
 
 		return obj
@@ -74,14 +90,14 @@ func ExprObject(fields []Expr) Expr {
 }
 
 func (e Expr) Field(name string) Expr {
-	return Expr{name, func(mem *Mem) Value {
+	return Expr{nextEID(), name, func(mem *Mem) Value {
 		val := ToObject(e, mem)
-		res, ok := val[name]
-		if ok {
-			return res
+		pos := mem.Field(e.Id, name)
+		if pos > -1 {
+			return val[pos]
 		}
 
-		return String("")
+		return Bool(false)
 	}}
 }
 
@@ -93,7 +109,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 	case "trunc":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{"", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func(m *Mem) Value {
 				return Number(math.Trunc(ToNum(e, m)))
 			}}
 		} else {
@@ -106,7 +122,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 			lat2expr := args[2]
 			lon2expr := args[3]
 
-			expr = Expr{"", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func(m *Mem) Value {
 				lat1 := ToNum(lat1expr, m)
 				lon1 := ToNum(lon1expr, m)
 				lat2 := ToNum(lat2expr, m)
@@ -120,7 +136,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 	case "trim":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{"", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func(m *Mem) Value {
 				return String(strings.Trim(ToStr(e, m), " \t\n\r"))
 			}}
 		} else {
@@ -129,7 +145,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 	case "lower":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{"", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func(m *Mem) Value {
 				return String(strings.ToLower(ToStr(e, m)))
 			}}
 		} else {
@@ -138,7 +154,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 	case "upper":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{"", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func(m *Mem) Value {
 				return String(strings.ToUpper(ToStr(e, m)))
 			}}
 		} else {
@@ -148,7 +164,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 		if len(args) == 2 {
 			se := args[0]
 			te := args[1]
-			expr = Expr{"", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func(m *Mem) Value {
 				return Number(Fuzzy(ToStr(se, m), ToStr(te, m)))
 			}}
 		} else {
@@ -162,103 +178,103 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 }
 
 func (e Expr) Not() Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Bool(!ToBool(e, m))
 	}}
 }
 
 func (e Expr) Neg() Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Number(-ToNum(e, m))
 	}}
 }
 
 func (e Expr) Pos() Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Number(+ToNum(e, m))
 	}}
 }
 
 func (l Expr) Mul(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Number(ToNum(l, m) * ToNum(r, m))
 	}}
 }
 
 func (l Expr) Div(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Number(ToNum(l, m) / ToNum(r, m))
 	}}
 }
 
 func (l Expr) Add(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Number(ToNum(l, m) + ToNum(r, m))
 	}}
 }
 
 func (l Expr) Sub(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Number(ToNum(l, m) - ToNum(r, m))
 	}}
 }
 
 func (l Expr) Cat(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return String(ToStr(l, m) + ToStr(r, m))
 	}}
 }
 
 func (l Expr) LT(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Bool(ToNum(l, m) < ToNum(r, m))
 	}}
 }
 
 func (l Expr) GT(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Bool(ToNum(l, m) > ToNum(r, m))
 	}}
 }
 
 func (l Expr) LTE(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Bool(ToNum(l, m) <= ToNum(r, m))
 	}}
 }
 
 func (l Expr) GTE(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Bool(ToNum(l, m) >= ToNum(r, m))
 	}}
 }
 
 func (l Expr) Eq(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return l.Eval(m).Equals(r.Eval(m))
 	}}
 }
 
 func (l Expr) NotEq(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Bool(!l.Eval(m).Equals(r.Eval(m)))
 	}}
 }
 
 func (e Expr) Match(re int) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Bool(m.MatchString(re, ToStr(e, m)))
 	}}
 }
 
 func (l Expr) And(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Bool(ToBool(l, m) && ToBool(r, m))
 	}}
 }
 
 func (l Expr) Or(r Expr) Expr {
-	return Expr{"", func(m *Mem) Value {
+	return Expr{nextEID(), "", func(m *Mem) Value {
 		return Bool(ToBool(l, m) || ToBool(r, m))
 	}}
 }

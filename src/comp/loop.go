@@ -16,7 +16,7 @@ func (l *Loop) Eval(mem *Mem) List {
 	res := make(List, 0)
 
 	for _, v := range ToList(l.list, mem) {
-		mem.Store(l.bind, v)
+		mem.Bind(l.list.Id, l.bind, v)
 
 		ok := true
 		for _, e := range l.sel {

@@ -70,7 +70,7 @@ func (s Store) Add(fileName string) error {
 func (s Store) Alloc() *Mem {
 	mem := NewMem()
 	for k, v := range s.body {
-		mem.Store(k, v)
+		mem.Store(k, v, s.head[k])
 	}
 
 	return mem
@@ -191,9 +191,9 @@ func tabDelimParser(id int, h Head, in chan line, out Body, ctl chan int) {
 		for i, s := range fields {
 			num, err := strconv.ParseFloat(s, 64)
 			if err != nil {
-				obj[head[i]] = String(s)
+				obj[i] = String(s)
 			} else {
-				obj[head[i]] = Number(num)
+				obj[i] = Number(num)
 				count++
 			}
 		}

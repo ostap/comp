@@ -10,8 +10,8 @@ import (
 type Bool bool
 type Number float64
 type String string
-type Object map[string]Value
 type List []Value
+type Object []Value
 
 type Value interface {
 	Bool() Bool
@@ -50,7 +50,7 @@ func (b Bool) List() List {
 }
 
 func (b Bool) Object() Object {
-	return Object{"": b}
+	return Object{b}
 }
 
 func (b Bool) Quote(w io.Writer) error {
@@ -89,7 +89,7 @@ func (n Number) List() List {
 }
 
 func (n Number) Object() Object {
-	return Object{"": n}
+	return Object{n}
 }
 
 func (n Number) Quote(w io.Writer) error {
@@ -125,7 +125,7 @@ func (s String) List() List {
 }
 
 func (s String) Object() Object {
-	return Object{"": s}
+	return Object{s}
 }
 
 func (s String) Quote(w io.Writer) error {
@@ -221,8 +221,7 @@ func (o Object) Quote(w io.Writer) error {
 		return err
 	}
 
-	i := 0
-	for k, v := range o {
+	for i, v := range o {
 		if i != 0 {
 			_, err = io.WriteString(w, ", ")
 			if err != nil {
@@ -230,7 +229,7 @@ func (o Object) Quote(w io.Writer) error {
 			}
 		}
 
-		_, err = fmt.Fprintf(w, `"%v": `, k)
+		_, err = fmt.Fprintf(w, `"%v": `, i)
 		if err != nil {
 			return err
 		}
@@ -238,8 +237,6 @@ func (o Object) Quote(w io.Writer) error {
 		if err := v.Quote(w); err != nil {
 			return err
 		}
-
-		i++
 	}
 
 	_, err = io.WriteString(w, " }")
@@ -253,9 +250,8 @@ func (o Object) Equals(v Value) Bool {
 		return false
 	}
 
-	for k, lv := range o {
-		rv, ok := r[k]
-		if !ok || !bool(lv.Equals(rv)) {
+	for i := 0; i < len(o); i++ {
+		if !bool(o[i].Equals(r[i])) {
 			return false
 		}
 	}

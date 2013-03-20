@@ -144,7 +144,7 @@ object_field:
 	}
     | IDENT ':' expression
 	{
-		$$ = Expr{$1, $3.Eval}
+		$$ = Expr{$3.Id, $1, $3.Eval}
 	}
     ;
 

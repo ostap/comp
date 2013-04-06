@@ -71,40 +71,62 @@ primary_expression:
       STRING
 	{
 		$$ = ExprConst(String($1))
+		gDecls.SetType($$, ScalarType(0))
 	}
     | NUMBER
 	{
 		$$ = ExprConst(Number($1))
+		gDecls.SetType($$, ScalarType(0))
 	}
     | TRUE
 	{
 		$$ = ExprConst(Bool(true))
+		gDecls.SetType($$, ScalarType(0))
 	}
     | FALSE
 	{
 		$$ = ExprConst(Bool(false))
+		gDecls.SetType($$, ScalarType(0))
 	}
     | IDENT
 	{
-		gDecls.Use($1)
-		$$ = ExprLoad($1)
+		addr := gDecls.UseIdent($1)
+		$$ = ExprLoad($1, addr)
+		gDecls.SetType($$, TypeOfIdent($1))
 	}
     | '{' object_field_list '}'
 	{
+		ot := make(ObjectType, len($2))
+		for i, f := range $2 {
+			ot[i].Type = TypeOfExpr(f.Id)
+			ot[i].Name = f.Name
+		}
+
 		$$ = ExprObject($2)
+		gDecls.SetType($$, ot)
 	}
     | '[' expression_list ']'
 	{
 		$$ = ExprList($2)
+
+		var eids []int64
+		for _, e := range $2 {
+			eids = append(eids, e.Id)
+		}
+		gDecls.SameTypes(eids)
+		gDecls.SetType($$, ListType{TypeOfExpr(eids[0])})
 	}
     | '[' expression '|' generator_list ']'
 	{
-		gDecls.Strict(false)
 		$$ = ExprComp($4.Return($2))
+
+		gDecls.Strict(false)
+		gDecls.SetType($$, ListType{TypeOfExpr($2.Id)})
 	}
     | '(' expression ')'
 	{
 		$$ = $2
+		gDecls.SetType($$, TypeOfExpr($2.Id))
 	}
     ;
 
@@ -112,8 +134,8 @@ generator_list:
       IDENT PROD expression
 	{
 		gDecls.Strict(true)
-		gDecls.Declare($1)
-		$$ = ForEach($1, $3)
+		addr := gDecls.Declare($1, TypeOfElem($3.Id))
+		$$ = ForEach(addr, $3)
 	}
     | generator_list ',' expression
 	{
@@ -121,8 +143,8 @@ generator_list:
 	}
     | generator_list ',' IDENT PROD expression
 	{
-		gDecls.Declare($3)
-		$$ = $1.Nest($3, $5)
+		addr := gDecls.Declare($3, TypeOfElem($5.Id))
+		$$ = $1.Nest(addr, $5)
 	}
     ;
 
@@ -166,14 +188,16 @@ postfix_expression:
 	}
     | postfix_expression '.' IDENT
 	{
-		$$ = $1.Field($3)
+		pos := gDecls.UseField($1.Id, $3)
+		$$ = $1.Field($3, pos)
+		gDecls.SetType($$, TypeOfField{$1.Id, $3})
 	}
     | postfix_expression '(' ')'
 	{
 		expr, err := $1.Call(nil)
 		if err == nil {
-			gDecls.Reset($1.Name)
 			$$ = expr
+			gDecls.SetType($$, TypeOfFunc($1.Name))
 		} else {
 			parseError(err.Error())
 		}
@@ -182,8 +206,8 @@ postfix_expression:
 	{
 		expr, err := $1.Call($3)
 		if err == nil {
-			gDecls.Reset($1.Name)
 			$$ = expr
+			gDecls.SetType($$, TypeOfFunc($1.Name))
 		} else {
 			parseError(err.Error())
 		}
@@ -198,14 +222,17 @@ unary_expression:
     | '!' postfix_expression
 	{
 		$$ = $2.Not()
+		gDecls.SetType($$, ScalarType(0))
 	}
     | '-' postfix_expression
 	{
 		$$ = $2.Neg()
+		gDecls.SetType($$, ScalarType(0))
 	}
     | '+' postfix_expression
 	{
 		$$ = $2.Pos()
+		gDecls.SetType($$, ScalarType(0))
 	}
     ;
 
@@ -217,10 +244,12 @@ multiplicative_expression:
     | multiplicative_expression '*' unary_expression
 	{
 		$$ = $1.Mul($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     | multiplicative_expression '/' unary_expression
 	{
 		$$ = $1.Div($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     ;
 
@@ -232,14 +261,17 @@ additive_expression:
     | additive_expression '+' multiplicative_expression
 	{
 		$$ = $1.Add($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     | additive_expression '-' multiplicative_expression
 	{
 		$$ = $1.Sub($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     | additive_expression CAT multiplicative_expression
 	{
 		$$ = $1.Cat($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     ;
 
@@ -251,18 +283,22 @@ relational_expression:
     | relational_expression '<' additive_expression
 	{
 		$$ = $1.LT($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     | relational_expression '>' additive_expression
 	{
 		$$ = $1.GT($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     | relational_expression LTE additive_expression
 	{
 		$$ = $1.LTE($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     | relational_expression GTE additive_expression
 	{
 		$$ = $1.GTE($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     ;
 
@@ -274,16 +310,19 @@ equality_expression:
     | equality_expression EQ relational_expression
 	{
 		$$ = $1.Eq($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     | equality_expression NEQ relational_expression
 	{
 		$$ = $1.NotEq($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     | equality_expression MATCH STRING
 	{
 		re, err := gMem.RegExp($3)
 		if err == nil {
-			$$ = $1.Match(re)
+			$$ = $1.Match($3, re)
+			gDecls.SetType($$, ScalarType(0))
 		} else {
 			parseError("%v", err)
 		}
@@ -298,10 +337,12 @@ expression:
     | expression AND equality_expression
 	{
 		$$ = $1.And($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     | expression OR equality_expression
 	{
 		$$ = $1.Or($3)
+		gDecls.SetType($$, ScalarType(0))
 	}
     ;
 
@@ -409,7 +450,7 @@ func Compile(expr string, mem *Mem) (Expr, *ParseError) {
 	defer gMutex.Unlock()
 
 	gMem = mem
-	gDecls = mem.Decls()
+	gDecls = mem.Decls
 	gLex = &lexer{}
 
 	gError = nil
@@ -420,8 +461,8 @@ func Compile(expr string, mem *Mem) (Expr, *ParseError) {
 	comp_Parse(gLex)
 
 	if gError == nil {
-		if bad := gDecls.Unknown(); len(bad) > 0 {
-			gError = NewError(0, 0, "unknown identifier(s): %v", bad)
+		if errors := gDecls.Verify(); len(errors) > 0 {
+			gError = NewError(0, 0, "%v", errors[0])
 		}
 	}
 

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"sync/atomic"
 )
@@ -41,19 +43,24 @@ func ToObject(e Expr, m *Mem) Object {
 }
 
 func ExprConst(c Value) Expr {
-	return Expr{nextEID(), "", func(mem *Mem) Value {
+	name := new(bytes.Buffer)
+	if err := c.Quote(name); err != nil {
+		panic("failed to quote a constant")
+	}
+
+	return Expr{nextEID(), name.String(), func(mem *Mem) Value {
 		return c
 	}}
 }
 
-func ExprLoad(name string) Expr {
-	id := nextEID()
-	return Expr{id, name, func(mem *Mem) Value {
-		return mem.Load(id, name)
+func ExprLoad(name string, addr int) Expr {
+	return Expr{nextEID(), name, func(mem *Mem) Value {
+		return mem.Load(addr)
 	}}
 }
 
 func ExprList(elems []Expr) Expr {
+	// TODO: compose a name
 	return Expr{nextEID(), "", func(mem *Mem) Value {
 		res := make(List, len(elems))
 		for i, e := range elems {
@@ -65,43 +72,44 @@ func ExprList(elems []Expr) Expr {
 }
 
 func ExprComp(loop *Loop) Expr {
+	// TODO: compose a name
 	return Expr{nextEID(), "", func(mem *Mem) Value {
 		return loop.Eval(mem)
 	}}
 }
 
 func ExprObject(fields []Expr) Expr {
-	id := nextEID()
-	head := make(Head)
+	name := new(bytes.Buffer)
+	fmt.Fprintf(name, "{")
 	for i, f := range fields {
-		head[f.Name] = i
+		if i != 0 {
+			fmt.Fprintf(name, ", ")
+		}
+		fmt.Fprintf(name, f.Name)
 	}
+	fmt.Fprintf(name, "}")
 
-	return Expr{id, "", func(mem *Mem) Value {
+	id := nextEID()
+	expr := Expr{id, name.String(), func(mem *Mem) Value {
 		obj := make(Object, len(fields))
-		mem.SetHead(id, head)
-
 		for i, f := range fields {
 			obj[i] = f.Eval(mem)
 		}
 
 		return obj
 	}}
+
+	return expr
 }
 
-func (e Expr) Field(name string) Expr {
-	return Expr{nextEID(), name, func(mem *Mem) Value {
-		val := ToObject(e, mem)
-		pos := mem.Field(e.Id, name)
-		if pos > -1 {
-			return val[pos]
-		}
-
-		return Bool(false)
+func (e Expr) Field(name string, pos *int) Expr {
+	return Expr{nextEID(), fmt.Sprintf("%v.%v", e.Name, name), func(mem *Mem) Value {
+		return ToObject(e, mem)[*pos]
 	}}
 }
 
 func (e Expr) Call(args []Expr) (expr Expr, err error) {
+	// TODO: compose a name
 	expr = BadExpr
 	err = nil
 
@@ -178,103 +186,104 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 }
 
 func (e Expr) Not() Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), "!" + e.Name, func(m *Mem) Value {
 		return Bool(!ToBool(e, m))
 	}}
 }
 
 func (e Expr) Neg() Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), "-" + e.Name, func(m *Mem) Value {
 		return Number(-ToNum(e, m))
 	}}
 }
 
 func (e Expr) Pos() Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), "+" + e.Name, func(m *Mem) Value {
 		return Number(+ToNum(e, m))
 	}}
 }
 
 func (l Expr) Mul(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v * %v", l.Name, r.Name), func(m *Mem) Value {
 		return Number(ToNum(l, m) * ToNum(r, m))
 	}}
 }
 
 func (l Expr) Div(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v / %v", l.Name, r.Name), func(m *Mem) Value {
 		return Number(ToNum(l, m) / ToNum(r, m))
 	}}
 }
 
 func (l Expr) Add(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v + %v", l.Name, r.Name), func(m *Mem) Value {
 		return Number(ToNum(l, m) + ToNum(r, m))
 	}}
 }
 
 func (l Expr) Sub(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v - %v", l.Name, r.Name), func(m *Mem) Value {
 		return Number(ToNum(l, m) - ToNum(r, m))
 	}}
 }
 
 func (l Expr) Cat(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v ++ %v", l.Name, r.Name), func(m *Mem) Value {
 		return String(ToStr(l, m) + ToStr(r, m))
 	}}
 }
 
 func (l Expr) LT(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v < %v", l.Name, r.Name), func(m *Mem) Value {
 		return Bool(ToNum(l, m) < ToNum(r, m))
 	}}
 }
 
 func (l Expr) GT(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v > %v", l.Name, r.Name), func(m *Mem) Value {
 		return Bool(ToNum(l, m) > ToNum(r, m))
 	}}
 }
 
 func (l Expr) LTE(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v <= %v", l.Name, r.Name), func(m *Mem) Value {
 		return Bool(ToNum(l, m) <= ToNum(r, m))
 	}}
 }
 
 func (l Expr) GTE(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v >= %v", l.Name, r.Name), func(m *Mem) Value {
 		return Bool(ToNum(l, m) >= ToNum(r, m))
 	}}
 }
 
 func (l Expr) Eq(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v == %v", l.Name, r.Name), func(m *Mem) Value {
 		return l.Eval(m).Equals(r.Eval(m))
 	}}
 }
 
 func (l Expr) NotEq(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v != %v", l.Name, r.Name), func(m *Mem) Value {
 		return Bool(!l.Eval(m).Equals(r.Eval(m)))
 	}}
 }
 
-func (e Expr) Match(re int) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+func (e Expr) Match(pattern string, re int) Expr {
+	name := fmt.Sprintf("%v =~ %v", e.Name, strconv.Quote(pattern))
+	return Expr{nextEID(), name, func(m *Mem) Value {
 		return Bool(m.MatchString(re, ToStr(e, m)))
 	}}
 }
 
 func (l Expr) And(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v && %v", l.Name, r.Name), func(m *Mem) Value {
 		return Bool(ToBool(l, m) && ToBool(r, m))
 	}}
 }
 
 func (l Expr) Or(r Expr) Expr {
-	return Expr{nextEID(), "", func(m *Mem) Value {
+	return Expr{nextEID(), fmt.Sprintf("%v || %v", l.Name, r.Name), func(m *Mem) Value {
 		return Bool(ToBool(l, m) || ToBool(r, m))
 	}}
 }

@@ -2,21 +2,21 @@ package main
 
 type Loop struct {
 	inner *Loop
-	bind  string
+	addr  int
 	list  Expr
 	sel   []Expr
 	ret   Expr
 }
 
-func ForEach(bind string, list Expr) *Loop {
-	return &Loop{nil, bind, list, nil, BadExpr}
+func ForEach(addr int, list Expr) *Loop {
+	return &Loop{nil, addr, list, nil, BadExpr}
 }
 
 func (l *Loop) Eval(mem *Mem) List {
 	res := make(List, 0)
 
 	for _, v := range ToList(l.list, mem) {
-		mem.Bind(l.list.Id, l.bind, v)
+		mem.Store(l.addr, v)
 
 		ok := true
 		for _, e := range l.sel {
@@ -39,8 +39,8 @@ func (l *Loop) Eval(mem *Mem) List {
 	return res
 }
 
-func (l *Loop) Nest(bind string, list Expr) *Loop {
-	l.innermost().inner = &Loop{nil, bind, list, nil, BadExpr}
+func (l *Loop) Nest(addr int, list Expr) *Loop {
+	l.innermost().inner = &Loop{nil, addr, list, nil, BadExpr}
 	return l
 }
 

@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-type Head map[string]int
-
 func Start(bind, data string, cores int) error {
 	log.Printf("running on %d core(s)", runtime.NumCPU())
 	log.Printf("adjusting runtime to run on %d cores (old value %d)", cores, runtime.GOMAXPROCS(cores))

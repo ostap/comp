@@ -73,7 +73,7 @@ func ExampleObjects() {
 	// [2,3]
 	// {"parent":1,"value":"hello"}
 	// "hello"
-	// ""
+	// cannot resolve type of '{id, obj}.obj.value.unknown'
 }
 
 func ExampleFuncs() {
@@ -110,15 +110,15 @@ func ExampleComps() {
 
 func ExampleErrors() {
 	run("a")
-	run("a + b")
+	run("b + a")
 	run("[i | j <- [1, 2, 3]]")
 	run("[i * j | i <- [0, 1, 2, 3], trunc(j), j <- [10, 20]]")
 
 	// Output:
-	// unknown identifier(s): [a]
-	// unknown identifier(s): [a b]
-	// unknown identifier(s): [i]
-	// unknown identifier(s): [j]
+	// unknown identifier 'a'
+	// unknown identifier 'b'
+	// unknown identifier 'i'
+	// unknown identifier 'j'
 }
 
 func run(query string) {

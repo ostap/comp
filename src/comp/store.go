@@ -16,8 +16,8 @@ import (
 type Body chan Value
 
 type Store struct {
-	head map[string]Head
-	body map[string]List
+	types map[string]ObjectType
+	lists map[string]List
 }
 
 type Stats struct {
@@ -33,11 +33,11 @@ type line struct {
 var StatsFailed = Stats{-1, -1}
 
 func NewStore() Store {
-	return Store{make(map[string]Head), make(map[string]List)}
+	return Store{make(map[string]ObjectType), make(map[string]List)}
 }
 
 func (s Store) IsDef(name string) bool {
-	return s.head[name] != nil
+	return s.types[name] != nil
 }
 
 func (s Store) Add(fileName string) error {
@@ -50,28 +50,35 @@ func (s Store) Add(fileName string) error {
 		return fmt.Errorf("invalid file name: '%v' cannot be used as an identifier (ignoring)", name)
 	}
 
-	head, err := readHead(fileName)
+	ot, err := readHead(fileName)
 	if err != nil {
 		return fmt.Errorf("failed to load %v: %v", fileName, err)
 	}
 
-	body, err := readBody(head, fileName)
+	list, err := readBody(ot, fileName)
 	if err != nil {
 		return fmt.Errorf("failed to load %v: %v", fileName, err)
 	}
 
-	s.head[name] = head
-	s.body[name] = body
+	s.types[name] = ot
+	s.lists[name] = list
 
-	log.Printf("stored %v (recs %v)", name, len(body))
+	log.Printf("stored %v (recs %v)", name, len(list))
 	return nil
 }
 
 func (s Store) Alloc() *Mem {
 	mem := NewMem()
-	for k, v := range s.body {
-		mem.Store(k, v, s.head[k])
+	for k, v := range s.lists {
+		mem.Global(k, v, ListType{s.types[k]})
 	}
+
+	mem.Global("trunc", nil, FuncType{ScalarType(0)})
+	mem.Global("dist", nil, FuncType{ScalarType(0)})
+	mem.Global("trim", nil, FuncType{ScalarType(0)})
+	mem.Global("lower", nil, FuncType{ScalarType(0)})
+	mem.Global("upper", nil, FuncType{ScalarType(0)})
+	mem.Global("fuzzy", nil, FuncType{ScalarType(0)})
 
 	return mem
 }
@@ -81,7 +88,7 @@ func IsIdent(s string) bool {
 	return ident
 }
 
-func readHead(fileName string) (Head, error) {
+func readHead(fileName string) (ObjectType, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
 		return nil, err
@@ -94,19 +101,22 @@ func readHead(fileName string) (Head, error) {
 		return nil, err
 	}
 
-	res := make(Head)
-	for idx, attr := range strings.Split(str, "\t") {
-		attr = strings.Trim(attr, " \r\n")
-		if !IsIdent(attr) {
-			return nil, fmt.Errorf("invalid attribute name: '%v'", attr)
+	fields := strings.Split(str, "\t")
+	res := make(ObjectType, len(fields))
+	for i, f := range fields {
+		f = strings.Trim(f, " \r\n")
+		if !IsIdent(f) {
+			return nil, fmt.Errorf("invalid field name: '%v'", f)
 		}
-		res[attr] = idx
+
+		res[i].Name = f
+		res[i].Type = ScalarType(0)
 	}
 
 	return res, nil
 }
 
-func readBody(head Head, fileName string) (List, error) {
+func readBody(ot ObjectType, fileName string) (List, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
 		return nil, err
@@ -135,7 +145,7 @@ func readBody(head Head, fileName string) (List, error) {
 	ctl := make(chan int)
 
 	for i := 0; i < runtime.NumCPU(); i++ {
-		go tabDelimParser(i, head, lines, tuples, ctl)
+		go tabDelimParser(i, ot, lines, tuples, ctl)
 	}
 	go func() {
 		for i := 0; i < runtime.NumCPU(); i++ {
@@ -145,7 +155,7 @@ func readBody(head Head, fileName string) (List, error) {
 	}()
 
 	ticker := time.NewTicker(1 * time.Second)
-	body := make(List, 0)
+	list := make(List, 0)
 
 	count := 0
 	stop := false
@@ -159,35 +169,30 @@ func readBody(head Head, fileName string) (List, error) {
 				break
 			}
 
-			body = append(body, t)
+			list = append(list, t)
 			count++
 		}
 	}
 	ticker.Stop()
 
-	return body, nil
+	return list, nil
 }
 
-func tabDelimParser(id int, h Head, in chan line, out Body, ctl chan int) {
-	head := make([]string, len(h))
-	for f, i := range h {
-		head[i] = f
-	}
-
+func tabDelimParser(id int, ot ObjectType, in chan line, out Body, ctl chan int) {
 	count := 0
 	for l := range in {
 		fields := strings.Split(l.lineStr[:len(l.lineStr)-1], "\t")
-		if len(fields) > len(head) {
-			log.Printf("line %d: truncating object (-%d fields)", l.lineNo, len(fields)-len(head))
-			fields = fields[:len(head)]
-		} else if len(fields) < len(head) {
+		if len(fields) > len(ot) {
+			log.Printf("line %d: truncating object (-%d fields)", l.lineNo, len(fields)-len(ot))
+			fields = fields[:len(ot)]
+		} else if len(fields) < len(ot) {
 			log.Printf("line %d: missing fields, appending blank strings", l.lineNo)
-			for len(fields) < len(head) {
+			for len(fields) < len(ot) {
 				fields = append(fields, "")
 			}
 		}
 
-		obj := make(Object, len(head))
+		obj := make(Object, len(ot))
 		for i, s := range fields {
 			num, err := strconv.ParseFloat(s, 64)
 			if err != nil {

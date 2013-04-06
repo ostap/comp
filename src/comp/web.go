@@ -113,6 +113,7 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		expr, err := Compile(req.Expr, mem)
 		if err != nil {
 			info, _ := json.Marshal(err)
+			log.Printf("compilation error '%v'", req.Expr)
 			badReq(w, string(info))
 			return
 		}

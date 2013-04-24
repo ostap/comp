@@ -24,7 +24,6 @@ var gError *ParseError
 	num   float64
 	expr  Expr
 	exprs []Expr
-	loop  *Loop
 }
 
 %token EQ    // "=="
@@ -54,7 +53,6 @@ var gError *ParseError
 %type <exprs> expression_list
 %type <expr> object_field
 %type <exprs> object_field_list
-%type <loop> generator_list
 
 %start program
 
@@ -70,22 +68,30 @@ program:
 primary_expression:
       STRING
 	{
-		$$ = ExprConst(String($1))
+		addr := gDecls.UseScalar()
+		gMem.Store(addr, String($1))
+		$$ = ExprLoad(strconv.Quote($1), addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | NUMBER
 	{
-		$$ = ExprConst(Number($1))
+		addr := gDecls.UseScalar()
+		gMem.Store(addr, Number($1))
+		$$ = ExprLoad(fmt.Sprintf("%v", $1), addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | TRUE
 	{
-		$$ = ExprConst(Bool(true))
+		addr := gDecls.UseScalar()
+		gMem.Store(addr, Bool(true))
+		$$ = ExprLoad("true", addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | FALSE
 	{
-		$$ = ExprConst(Bool(false))
+		addr := gDecls.UseScalar()
+		gMem.Store(addr, Bool(false))
+		$$ = ExprLoad("false", addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | IDENT
@@ -101,35 +107,40 @@ primary_expression:
 			ot[i].Type = TypeOfExpr(f.Id)
 			ot[i].Name = f.Name
 		}
-
 		$$ = ExprObject($2)
 		gDecls.SetType($$, ot)
 	}
     | '[' expression_list ']'
 	{
-		$$ = ExprList($2)
-
-		var eids []int64
+		eids := make([]int64, 0)
 		for _, e := range $2 {
 			eids = append(eids, e.Id)
 		}
-		gDecls.SameTypes(eids)
+		$$ = ExprList($2)
+		gDecls.SameType(eids)
 		gDecls.SetType($$, ListType{TypeOfExpr(eids[0])})
 	}
-    | '[' expression '|' generator_list ']'
+    | '[' expression '|' IDENT PROD expression ']'
 	{
-		$$ = ExprComp($4.Return($2))
-
-		gDecls.Strict(false)
+		elemAddr := gDecls.Declare($4, TypeOfElem($6.Id))
+		listAddr := gDecls.UseScalar()
+		$$ = ExprComp(listAddr, $6, elemAddr, $2)
+		gDecls.SetType($$, ListType{TypeOfExpr($2.Id)})
+	}
+    | '[' expression '|' IDENT PROD expression ',' expression ']'
+	{
+		elemAddr := gDecls.Declare($4, TypeOfElem($6.Id))
+		listAddr := gDecls.UseScalar()
+		$$ = ExprCompSelect(listAddr, $6, elemAddr, $8, $2)
 		gDecls.SetType($$, ListType{TypeOfExpr($2.Id)})
 	}
     | '(' expression ')'
 	{
 		$$ = $2
-		gDecls.SetType($$, TypeOfExpr($2.Id))
 	}
     ;
 
+/*
 generator_list:
       IDENT PROD expression
 	{
@@ -147,6 +158,7 @@ generator_list:
 		$$ = $1.Nest(addr, $5)
 	}
     ;
+*/
 
 object_field_list:
       object_field
@@ -166,7 +178,7 @@ object_field:
 	}
     | IDENT ':' expression
 	{
-		$$ = Expr{$3.Id, $1, $3.Eval}
+		$$ = Expr{$3.Id, $1, $3.Code}
 	}
     ;
 
@@ -221,17 +233,17 @@ unary_expression:
 	}
     | '!' postfix_expression
 	{
-		$$ = $2.Not()
+		$$ = $2.Unary(OpNot, "!")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | '-' postfix_expression
 	{
-		$$ = $2.Neg()
+		$$ = $2.Unary(OpNeg, "-")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | '+' postfix_expression
 	{
-		$$ = $2.Pos()
+		$$ = $2.Unary(OpPos, "+")
 		gDecls.SetType($$, ScalarType(0))
 	}
     ;
@@ -243,12 +255,12 @@ multiplicative_expression:
 	}
     | multiplicative_expression '*' unary_expression
 	{
-		$$ = $1.Mul($3)
+		$$ = $1.Binary($3, OpMul, "*")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | multiplicative_expression '/' unary_expression
 	{
-		$$ = $1.Div($3)
+		$$ = $1.Binary($3, OpDiv, "/")
 		gDecls.SetType($$, ScalarType(0))
 	}
     ;
@@ -260,17 +272,17 @@ additive_expression:
 	}
     | additive_expression '+' multiplicative_expression
 	{
-		$$ = $1.Add($3)
+		$$ = $1.Binary($3, OpAdd, "+")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | additive_expression '-' multiplicative_expression
 	{
-		$$ = $1.Sub($3)
+		$$ = $1.Binary($3, OpSub, "-")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | additive_expression CAT multiplicative_expression
 	{
-		$$ = $1.Cat($3)
+		$$ = $1.Binary($3, OpCat, "++")
 		gDecls.SetType($$, ScalarType(0))
 	}
     ;
@@ -282,22 +294,22 @@ relational_expression:
 	}
     | relational_expression '<' additive_expression
 	{
-		$$ = $1.LT($3)
+		$$ = $1.Binary($3, OpLT, "<")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | relational_expression '>' additive_expression
 	{
-		$$ = $1.GT($3)
+		$$ = $1.Binary($3, OpGT, ">")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | relational_expression LTE additive_expression
 	{
-		$$ = $1.LTE($3)
+		$$ = $1.Binary($3, OpLTE, "<=")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | relational_expression GTE additive_expression
 	{
-		$$ = $1.GTE($3)
+		$$ = $1.Binary($3, OpGTE, ">=")
 		gDecls.SetType($$, ScalarType(0))
 	}
     ;
@@ -309,12 +321,12 @@ equality_expression:
 	}
     | equality_expression EQ relational_expression
 	{
-		$$ = $1.Eq($3)
+		$$ = $1.Binary($3, OpEq, "==")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | equality_expression NEQ relational_expression
 	{
-		$$ = $1.NotEq($3)
+		$$ = $1.Binary($3, OpNEq, "!=")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | equality_expression MATCH STRING
@@ -336,12 +348,12 @@ expression:
 	}
     | expression AND equality_expression
 	{
-		$$ = $1.And($3)
+		$$ = $1.Binary($3, OpAnd, "&&")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | expression OR equality_expression
 	{
-		$$ = $1.Or($3)
+		$$ = $1.Binary($3, OpOr, "||")
 		gDecls.SetType($$, ScalarType(0))
 	}
     ;
@@ -445,7 +457,7 @@ func parseError(s string, v ...interface{}) {
 	gError = NewError(gLex.scan.Pos().Line, gLex.scan.Pos().Column, s, v...)
 }
 
-func Compile(expr string, mem *Mem) (Expr, *ParseError) {
+func Compile(expr string, mem *Mem) (*Program, *ParseError) {
 	gMutex.Lock()
 	defer gMutex.Unlock()
 
@@ -460,11 +472,15 @@ func Compile(expr string, mem *Mem) (Expr, *ParseError) {
 	gLex.scan.Init(reader)
 	comp_Parse(gLex)
 
+	var prog *Program
 	if gError == nil {
-		if errors := gDecls.Verify(); len(errors) > 0 {
+		errors := gDecls.Verify()
+		if len(errors) > 0 {
 			gError = NewError(0, 0, "%v", errors[0])
+		} else {
+			prog = &Program{gExpr.Code(), mem.cells[:]}
 		}
 	}
 
-	return gExpr, gError
+	return prog, gError
 }

@@ -45,6 +45,11 @@ func (d *Decls) UseIdent(name string) int {
 	return d.find(name)
 }
 
+func (d *Decls) UseScalar() int {
+	name := fmt.Sprintf("+%d", len(d.idents))
+	return d.find(name)
+}
+
 func (d *Decls) UseField(eid int64, name string) *int {
 	pos := -1
 	for i, f := range d.fields {
@@ -72,7 +77,7 @@ func (d *Decls) UseField(eid int64, name string) *int {
 	return d.fields[pos].pos
 }
 
-func (d *Decls) SameTypes(eids []int64) {
+func (d *Decls) SameType(eids []int64) {
 	d.sameTypes = append(d.sameTypes, eids)
 }
 
@@ -84,7 +89,7 @@ func (d *Decls) SetType(e Expr, t Type) {
 func (d *Decls) Verify() []string {
 	// check identifiers
 	for _, n := range d.idents {
-		if d.names[n] == nil {
+		if n[0] != '+' && d.names[n] == nil {
 			d.err("unknown identifier '%v'", n)
 		}
 	}

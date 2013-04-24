@@ -3,16 +3,14 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"strconv"
-	"strings"
 	"sync/atomic"
 )
 
 type Expr struct {
 	Id   int64
 	Name string
-	Eval func(mem *Mem) Value
+	Code func() []Op
 }
 
 var BadExpr = Expr{0, "", nil}
@@ -22,59 +20,9 @@ func nextEID() int64 {
 	return atomic.AddInt64(&exprSeqNum, 1)
 }
 
-func ToBool(e Expr, m *Mem) bool {
-	return bool(e.Eval(m).Bool())
-}
-
-func ToNum(e Expr, m *Mem) float64 {
-	return float64(e.Eval(m).Number())
-}
-
-func ToStr(e Expr, m *Mem) string {
-	return string(e.Eval(m).String())
-}
-
-func ToList(e Expr, m *Mem) List {
-	return e.Eval(m).List()
-}
-
-func ToObject(e Expr, m *Mem) Object {
-	return e.Eval(m).Object()
-}
-
-func ExprConst(c Value) Expr {
-	name := new(bytes.Buffer)
-	if err := c.Quote(name); err != nil {
-		panic("failed to quote a constant")
-	}
-
-	return Expr{nextEID(), name.String(), func(mem *Mem) Value {
-		return c
-	}}
-}
-
 func ExprLoad(name string, addr int) Expr {
-	return Expr{nextEID(), name, func(mem *Mem) Value {
-		return mem.Load(addr)
-	}}
-}
-
-func ExprList(elems []Expr) Expr {
-	// TODO: compose a name
-	return Expr{nextEID(), "", func(mem *Mem) Value {
-		res := make(List, len(elems))
-		for i, e := range elems {
-			res[i] = e.Eval(mem)
-		}
-
-		return res
-	}}
-}
-
-func ExprComp(loop *Loop) Expr {
-	// TODO: compose a name
-	return Expr{nextEID(), "", func(mem *Mem) Value {
-		return loop.Eval(mem)
+	return Expr{nextEID(), name, func() []Op {
+		return []Op{OpLoad(addr)}
 	}}
 }
 
@@ -89,22 +37,113 @@ func ExprObject(fields []Expr) Expr {
 	}
 	fmt.Fprintf(name, "}")
 
-	id := nextEID()
-	expr := Expr{id, name.String(), func(mem *Mem) Value {
-		obj := make(Object, len(fields))
+	return Expr{nextEID(), name.String(), func() []Op {
+		code := []Op{OpObject(len(fields))}
 		for i, f := range fields {
-			obj[i] = f.Eval(mem)
+			for _, c := range f.Code() {
+				code = append(code, c)
+			}
+			code = append(code, OpSet(i))
 		}
 
-		return obj
+		return code
 	}}
+}
 
-	return expr
+func ExprList(elems []Expr) Expr {
+	// TODO: compose a name
+	return Expr{nextEID(), "", func() []Op {
+		code := []Op{OpList}
+		for _, e := range elems {
+			for _, c := range e.Code() {
+				code = append(code, c)
+			}
+			code = append(code, OpAppend)
+		}
+
+		return code
+	}}
+}
+
+func ExprCompSelect(listAddr int, list Expr, elemAddr int, sel, ret Expr) Expr {
+	// TODO: compose a name
+	return Expr{nextEID(), "", func() []Op {
+		code := list.Code()
+		selCode := sel.Code()
+		retCode := ret.Code()
+
+		loopJump := 1 + len(selCode) + 2 + len(retCode) + 4
+		nextJump := -2 - len(retCode) - 2 - len(selCode) - 1
+		testJump := 1 + len(retCode) + 3
+
+		code = append(code, OpLoop(loopJump))
+		code = append(code, OpStore(elemAddr))
+		for _, c := range selCode {
+			code = append(code, c)
+		}
+		code = append(code, OpTest(testJump))
+		code = append(code, OpLoad(listAddr))
+		for _, c := range retCode {
+			code = append(code, c)
+		}
+		code = append(code, OpAppend)
+		code = append(code, OpStore(listAddr))
+		code = append(code, OpNext(nextJump))
+		return append(code, OpLoad(listAddr))
+	}}
+}
+
+func ExprComp(listAddr int, list Expr, elemAddr int, ret Expr) Expr {
+	// TODO: compose a name
+	return Expr{nextEID(), "", func() []Op {
+		code := list.Code()
+		retCode := ret.Code()
+
+		loopJump := 2 + len(retCode) + 4
+		nextJump := -2 - len(retCode) - 2
+
+		code = append(code, OpLoop(loopJump))
+		code = append(code, OpStore(elemAddr))
+		code = append(code, OpLoad(listAddr))
+		for _, c := range retCode {
+			code = append(code, c)
+		}
+		code = append(code, OpAppend)
+		code = append(code, OpStore(listAddr))
+		code = append(code, OpNext(nextJump))
+		return append(code, OpLoad(listAddr))
+	}}
 }
 
 func (e Expr) Field(name string, pos *int) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v.%v", e.Name, name), func(mem *Mem) Value {
-		return ToObject(e, mem)[*pos]
+	return Expr{nextEID(), fmt.Sprintf("%v.%v", e.Name, name), func() []Op {
+		return append(e.Code(), OpGet(*pos))
+	}}
+}
+
+func (l Expr) Binary(r Expr, op Op, name string) Expr {
+	return Expr{nextEID(), fmt.Sprintf("%v %v %v", l.Name, name, r.Name), func() []Op {
+		lc := l.Code()
+		rc := r.Code()
+		code := make([]Op, len(rc)+len(lc)+1)
+		copy(code, rc)
+		copy(code[len(rc):], lc)
+		code[len(code)-1] = op
+
+		return code
+	}}
+}
+
+func (e Expr) Unary(op Op, name string) Expr {
+	return Expr{nextEID(), fmt.Sprintf("%v%v", name, e.Name), func() []Op {
+		return append(e.Code(), op)
+	}}
+}
+
+func (e Expr) Match(pattern string, re int) Expr {
+	name := fmt.Sprintf("%v =~ %v", e.Name, strconv.Quote(pattern))
+	return Expr{nextEID(), name, func() []Op {
+		return append(e.Code(), OpMatch(re))
 	}}
 }
 
@@ -113,11 +152,12 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 	expr = BadExpr
 	err = nil
 
+	/* TODO: enable functions
 	switch e.Name {
 	case "trunc":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{nextEID(), "", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func() []Op {
 				return Number(math.Trunc(ToNum(e, m)))
 			}}
 		} else {
@@ -130,7 +170,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 			lat2expr := args[2]
 			lon2expr := args[3]
 
-			expr = Expr{nextEID(), "", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func() []Op {
 				lat1 := ToNum(lat1expr, m)
 				lon1 := ToNum(lon1expr, m)
 				lat2 := ToNum(lat2expr, m)
@@ -144,7 +184,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 	case "trim":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{nextEID(), "", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func() []Op {
 				return String(strings.Trim(ToStr(e, m), " \t\n\r"))
 			}}
 		} else {
@@ -153,7 +193,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 	case "lower":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{nextEID(), "", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func() []Op {
 				return String(strings.ToLower(ToStr(e, m)))
 			}}
 		} else {
@@ -162,7 +202,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 	case "upper":
 		if len(args) == 1 {
 			e := args[0]
-			expr = Expr{nextEID(), "", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func() []Op {
 				return String(strings.ToUpper(ToStr(e, m)))
 			}}
 		} else {
@@ -172,7 +212,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 		if len(args) == 2 {
 			se := args[0]
 			te := args[1]
-			expr = Expr{nextEID(), "", func(m *Mem) Value {
+			expr = Expr{nextEID(), "", func() []Op {
 				return Number(Fuzzy(ToStr(se, m), ToStr(te, m)))
 			}}
 		} else {
@@ -181,109 +221,7 @@ func (e Expr) Call(args []Expr) (expr Expr, err error) {
 	default:
 		err = fmt.Errorf("unknown function %v(%d)", e.Name, len(args))
 	}
+	*/
 
 	return
-}
-
-func (e Expr) Not() Expr {
-	return Expr{nextEID(), "!" + e.Name, func(m *Mem) Value {
-		return Bool(!ToBool(e, m))
-	}}
-}
-
-func (e Expr) Neg() Expr {
-	return Expr{nextEID(), "-" + e.Name, func(m *Mem) Value {
-		return Number(-ToNum(e, m))
-	}}
-}
-
-func (e Expr) Pos() Expr {
-	return Expr{nextEID(), "+" + e.Name, func(m *Mem) Value {
-		return Number(+ToNum(e, m))
-	}}
-}
-
-func (l Expr) Mul(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v * %v", l.Name, r.Name), func(m *Mem) Value {
-		return Number(ToNum(l, m) * ToNum(r, m))
-	}}
-}
-
-func (l Expr) Div(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v / %v", l.Name, r.Name), func(m *Mem) Value {
-		return Number(ToNum(l, m) / ToNum(r, m))
-	}}
-}
-
-func (l Expr) Add(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v + %v", l.Name, r.Name), func(m *Mem) Value {
-		return Number(ToNum(l, m) + ToNum(r, m))
-	}}
-}
-
-func (l Expr) Sub(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v - %v", l.Name, r.Name), func(m *Mem) Value {
-		return Number(ToNum(l, m) - ToNum(r, m))
-	}}
-}
-
-func (l Expr) Cat(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v ++ %v", l.Name, r.Name), func(m *Mem) Value {
-		return String(ToStr(l, m) + ToStr(r, m))
-	}}
-}
-
-func (l Expr) LT(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v < %v", l.Name, r.Name), func(m *Mem) Value {
-		return Bool(ToNum(l, m) < ToNum(r, m))
-	}}
-}
-
-func (l Expr) GT(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v > %v", l.Name, r.Name), func(m *Mem) Value {
-		return Bool(ToNum(l, m) > ToNum(r, m))
-	}}
-}
-
-func (l Expr) LTE(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v <= %v", l.Name, r.Name), func(m *Mem) Value {
-		return Bool(ToNum(l, m) <= ToNum(r, m))
-	}}
-}
-
-func (l Expr) GTE(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v >= %v", l.Name, r.Name), func(m *Mem) Value {
-		return Bool(ToNum(l, m) >= ToNum(r, m))
-	}}
-}
-
-func (l Expr) Eq(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v == %v", l.Name, r.Name), func(m *Mem) Value {
-		return l.Eval(m).Equals(r.Eval(m))
-	}}
-}
-
-func (l Expr) NotEq(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v != %v", l.Name, r.Name), func(m *Mem) Value {
-		return Bool(!l.Eval(m).Equals(r.Eval(m)))
-	}}
-}
-
-func (e Expr) Match(pattern string, re int) Expr {
-	name := fmt.Sprintf("%v =~ %v", e.Name, strconv.Quote(pattern))
-	return Expr{nextEID(), name, func(m *Mem) Value {
-		return Bool(m.MatchString(re, ToStr(e, m)))
-	}}
-}
-
-func (l Expr) And(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v && %v", l.Name, r.Name), func(m *Mem) Value {
-		return Bool(ToBool(l, m) && ToBool(r, m))
-	}}
-}
-
-func (l Expr) Or(r Expr) Expr {
-	return Expr{nextEID(), fmt.Sprintf("%v || %v", l.Name, r.Name), func(m *Mem) Value {
-		return Bool(ToBool(l, m) || ToBool(r, m))
-	}}
 }

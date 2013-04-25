@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path"
 	"regexp"
@@ -195,7 +196,7 @@ func tabDelimParser(id int, ot ObjectType, in chan line, out Body, ctl chan int)
 		obj := make(Object, len(ot))
 		for i, s := range fields {
 			num, err := strconv.ParseFloat(s, 64)
-			if err != nil {
+			if err != nil || math.IsNaN(num) || math.IsInf(num, 0) {
 				obj[i] = String(s)
 			} else {
 				obj[i] = Number(num)

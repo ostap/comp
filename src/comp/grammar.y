@@ -12,7 +12,6 @@ import (
 var gMutex sync.Mutex
 
 var gDecls *Decls
-var gMem   *Mem
 var gLex   *lexer
 
 var gExpr  Expr
@@ -70,29 +69,25 @@ program:
 primary_expression:
       STRING
 	{
-		addr := gDecls.UseAnon()
-		gMem.Store(addr, String($1))
+		addr := gDecls.Declare("", String($1), ScalarType(0))
 		$$ = ExprLoad(strconv.Quote($1), addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | NUMBER
 	{
-		addr := gDecls.UseAnon()
-		gMem.Store(addr, Number($1))
+		addr := gDecls.Declare("", Number($1), ScalarType(0))
 		$$ = ExprLoad(fmt.Sprintf("%v", $1), addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | TRUE
 	{
-		addr := gDecls.UseAnon()
-		gMem.Store(addr, Bool(true))
+		addr := gDecls.Declare("", Bool(true), ScalarType(0))
 		$$ = ExprLoad("true", addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | FALSE
 	{
-		addr := gDecls.UseAnon()
-		gMem.Store(addr, Bool(false))
+		addr := gDecls.Declare("", Bool(false), ScalarType(0))
 		$$ = ExprLoad("false", addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
@@ -124,9 +119,12 @@ primary_expression:
 	}
     | '[' expression '|' generator_list ']'
 	{
-		loop := $4.Return($2)
-		$$ = ExprComp(loop)
-		gDecls.SetType($$, ListType{TypeOfExpr($2.Id)})
+		gDecls.Strict(false)
+		resType := ListType{TypeOfExpr($2.Id)}
+		resAddr := gDecls.Declare("", nil, resType)
+		loop := $4.Return($2, resAddr)
+		$$ = ExprComp(loop, resAddr)
+		gDecls.SetType($$, resType)
 	}
     | '(' expression ')'
 	{
@@ -138,9 +136,8 @@ generator_list:
       IDENT PROD expression
 	{
 		gDecls.Strict(true)
-		varAddr := gDecls.Declare($1, TypeOfElem($3.Id))
-		resAddr := gDecls.UseAnon()
-		$$ = ForEach(resAddr, varAddr, $3)
+		varAddr := gDecls.Declare($1, nil, TypeOfElem($3.Id))
+		$$ = ForEach(varAddr, $3)
 	}
     | generator_list ',' expression
 	{
@@ -148,9 +145,8 @@ generator_list:
 	}
     | generator_list ',' IDENT PROD expression
 	{
-		varAddr := gDecls.Declare($3, TypeOfElem($5.Id))
-		resAddr := gDecls.UseAnon()
-		$$ = $1.Nest(resAddr, varAddr, $5)
+		varAddr := gDecls.Declare($3, nil, TypeOfElem($5.Id))
+		$$ = $1.Nest(varAddr, $5)
 	}
     ;
 
@@ -325,7 +321,7 @@ equality_expression:
 	}
     | equality_expression MATCH STRING
 	{
-		re, err := gMem.RegExp($3)
+		re, err := gDecls.RegExp($3)
 		if err == nil {
 			$$ = $1.Match($3, re)
 			gDecls.SetType($$, ScalarType(0))
@@ -451,12 +447,11 @@ func parseError(s string, v ...interface{}) {
 	gError = NewError(gLex.scan.Pos().Line, gLex.scan.Pos().Column, s, v...)
 }
 
-func Compile(expr string, mem *Mem) (*Program, *ParseError) {
+func Compile(expr string, decls *Decls) (*Program, *ParseError) {
 	gMutex.Lock()
 	defer gMutex.Unlock()
 
-	gMem = mem
-	gDecls = mem.Decls
+	gDecls = decls
 	gLex = &lexer{}
 
 	gError = nil
@@ -472,7 +467,7 @@ func Compile(expr string, mem *Mem) (*Program, *ParseError) {
 		if len(errors) > 0 {
 			gError = NewError(0, 0, "%v", errors[0])
 		} else {
-			prog = &Program{gExpr.Code(), mem.cells[:]}
+			prog = &Program{gExpr.Code(), gDecls.values, gDecls.regexps}
 		}
 	}
 

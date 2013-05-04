@@ -96,6 +96,17 @@ func ExampleStrings() {
 	// "2hello"
 }
 
+func ExampleRegexps() {
+	run("`catdog` =~ `dog`")
+	run("`catdog` =~ `dogma`")
+	run("`catdog` =~ `c.....`")
+
+	// Output:
+	// true
+	// false
+	// true
+}
+
 func ExampleLists() {
 	run("[true, false]")
 	run("[1,2,3]")

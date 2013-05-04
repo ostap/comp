@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 )
 
 type Op int64
@@ -229,8 +230,9 @@ func (s *Stack) PushStr(str string) {
 }
 
 type Program struct {
-	code []Op
-	data []Value
+	code    []Op
+	data    []Value
+	regexps []*regexp.Regexp
 	// funcs []Func
 }
 
@@ -242,10 +244,6 @@ func (p *Program) Run() Value {
 		jump := false
 
 		switch op.Code() {
-		case opLoad:
-			s.Push(p.data[op.Arg()])
-		case opStore:
-			p.data[op.Arg()] = s.Pop()
 		case OpList:
 			s.Push(make(List, 0))
 		case OpAppend:
@@ -253,42 +251,6 @@ func (p *Program) Run() Value {
 			list := s.PopList()
 			list = append(list, val)
 			s.Push(list)
-		case opObject:
-			s.Push(make(Object, op.Arg()))
-		case opSet:
-			val := s.Pop()
-			obj := s.PopObject()
-			obj[op.Arg()] = val
-			s.Push(obj)
-		case opGet:
-			obj := s.PopObject()
-			s.Push(obj[op.Arg()])
-		case opLoop:
-			list := s.PopList()
-			if len(list) > 0 {
-				s.Push(list)
-				s.PushNum(1)
-				s.Push(list[0])
-			} else {
-				i += op.Arg()
-				jump = true
-			}
-		case opNext:
-			idx := s.PopNum()
-			list := s.PopList()
-			if int(idx) > -1 && int(idx) < len(list) {
-				s.PushList(list)
-				s.PushNum(idx + 1)
-				s.Push(list[int(idx)])
-
-				i += op.Arg()
-				jump = true
-			}
-		case opTest:
-			if !s.PopBool() {
-				i += op.Arg()
-				jump = true
-			}
 		case OpNot:
 			s.PushBool(!s.PopBool())
 		case OpNeg:
@@ -349,6 +311,51 @@ func (p *Program) Run() Value {
 			l := s.Pop()
 			r := s.Pop()
 			s.PushBool(!bool(l.Equals(r)))
+
+		case opLoad:
+			s.Push(p.data[op.Arg()])
+		case opStore:
+			p.data[op.Arg()] = s.Pop()
+		case opObject:
+			s.Push(make(Object, op.Arg()))
+		case opSet:
+			val := s.Pop()
+			obj := s.PopObject()
+			obj[op.Arg()] = val
+			s.Push(obj)
+		case opGet:
+			obj := s.PopObject()
+			s.Push(obj[op.Arg()])
+		case opLoop:
+			list := s.PopList()
+			if len(list) > 0 {
+				s.Push(list)
+				s.PushNum(1)
+				s.Push(list[0])
+			} else {
+				i += op.Arg()
+				jump = true
+			}
+		case opNext:
+			idx := s.PopNum()
+			list := s.PopList()
+			if int(idx) > -1 && int(idx) < len(list) {
+				s.PushList(list)
+				s.PushNum(idx + 1)
+				s.Push(list[int(idx)])
+
+				i += op.Arg()
+				jump = true
+			}
+		case opTest:
+			if !s.PopBool() {
+				i += op.Arg()
+				jump = true
+			}
+		case opMatch:
+			str := s.PopStr()
+			val := p.regexps[op.Arg()].MatchString(str)
+			s.PushBool(val)
 		default:
 			msg := fmt.Sprintf("unknown operation %x", op)
 			panic(msg)

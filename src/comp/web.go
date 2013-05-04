@@ -109,8 +109,8 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		start := time.Now()
 
-		mem := Store(fq).Alloc()
-		prg, err := Compile(req.Expr, mem)
+		decls := Store(fq).Decls()
+		prg, err := Compile(req.Expr, decls)
 		if err != nil {
 			info, _ := json.Marshal(err)
 			log.Printf("compilation error '%v'", req.Expr)

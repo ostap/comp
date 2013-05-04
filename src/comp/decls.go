@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 )
 
 type Decls struct {
@@ -17,6 +18,8 @@ type Decls struct {
 		pos  *int
 	}
 	sameTypes [][]int64
+	values    []Value
+	regexps   []*regexp.Regexp
 }
 
 func NewDecls() *Decls {
@@ -32,9 +35,29 @@ func (d *Decls) Strict(on bool) {
 }
 
 // TODO: check redeclarations
-func (d *Decls) Declare(name string, t Type) int {
+func (d *Decls) Declare(name string, v Value, t Type) int {
+	if name == "" {
+		name = fmt.Sprintf("+%d", len(d.idents))
+	}
+
+	addr := d.find(name)
+
 	d.names[name] = t
-	return d.find(name)
+	d.values[addr] = v
+
+	return addr
+}
+
+func (d *Decls) RegExp(pattern string) (int, error) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return -1, err
+	}
+
+	pos := len(d.regexps)
+	d.regexps = append(d.regexps, re)
+
+	return pos, nil
 }
 
 func (d *Decls) UseIdent(name string) int {
@@ -42,11 +65,6 @@ func (d *Decls) UseIdent(name string) int {
 		d.err("unknown identifier '%v'", name)
 	}
 
-	return d.find(name)
-}
-
-func (d *Decls) UseAnon() int {
-	name := fmt.Sprintf("+%d", len(d.idents))
 	return d.find(name)
 }
 
@@ -89,7 +107,7 @@ func (d *Decls) SetType(e Expr, t Type) {
 func (d *Decls) Verify() []string {
 	// check identifiers
 	for _, n := range d.idents {
-		if n[0] != '+' && d.names[n] == nil {
+		if d.names[n] == nil {
 			d.err("unknown identifier '%v'", n)
 		}
 	}
@@ -149,6 +167,7 @@ func (d *Decls) find(name string) int {
 	if addr < 0 {
 		addr = len(d.idents)
 		d.idents = append(d.idents, name)
+		d.values = append(d.values, nil)
 	}
 
 	return addr

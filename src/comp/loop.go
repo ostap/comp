@@ -33,8 +33,8 @@ type Loop struct {
 	ret     Expr
 }
 
-func ForEach(resAddr, varAddr int, list Expr) *Loop {
-	return &Loop{nil, resAddr, varAddr, list, nil, BadExpr}
+func ForEach(varAddr int, list Expr) *Loop {
+	return &Loop{nil, -1, varAddr, list, nil, BadExpr}
 }
 
 func (l *Loop) Code() []Op {
@@ -71,12 +71,8 @@ func (l *Loop) Code() []Op {
 	return append(code, OpNext(nextJump))
 }
 
-func (l *Loop) ResAddr() int {
-	return l.innermost().resAddr
-}
-
-func (l *Loop) Nest(resAddr, varAddr int, list Expr) *Loop {
-	l.innermost().inner = &Loop{nil, resAddr, varAddr, list, nil, BadExpr}
+func (l *Loop) Nest(varAddr int, list Expr) *Loop {
+	l.innermost().inner = &Loop{nil, -1, varAddr, list, nil, BadExpr}
 	return l
 }
 
@@ -86,8 +82,9 @@ func (l *Loop) Select(expr Expr) *Loop {
 	return l
 }
 
-func (l *Loop) Return(expr Expr) *Loop {
+func (l *Loop) Return(expr Expr, resAddr int) *Loop {
 	l.innermost().ret = expr
+	l.innermost().resAddr = resAddr
 	return l
 }
 

@@ -68,20 +68,20 @@ func (s Store) Add(fileName string) error {
 	return nil
 }
 
-func (s Store) Alloc() *Mem {
-	mem := NewMem()
+func (s Store) Decls() *Decls {
+	decls := NewDecls()
 	for k, v := range s.lists {
-		mem.Global(k, v, ListType{s.types[k]})
+		decls.Declare(k, v, ListType{s.types[k]})
 	}
 
-	mem.Global("trunc", nil, FuncType{ScalarType(0)})
-	mem.Global("dist", nil, FuncType{ScalarType(0)})
-	mem.Global("trim", nil, FuncType{ScalarType(0)})
-	mem.Global("lower", nil, FuncType{ScalarType(0)})
-	mem.Global("upper", nil, FuncType{ScalarType(0)})
-	mem.Global("fuzzy", nil, FuncType{ScalarType(0)})
+	decls.Declare("trunc", nil, FuncType{ScalarType(0)})
+	decls.Declare("dist", nil, FuncType{ScalarType(0)})
+	decls.Declare("trim", nil, FuncType{ScalarType(0)})
+	decls.Declare("lower", nil, FuncType{ScalarType(0)})
+	decls.Declare("upper", nil, FuncType{ScalarType(0)})
+	decls.Declare("fuzzy", nil, FuncType{ScalarType(0)})
 
-	return mem
+	return decls
 }
 
 func IsIdent(s string) bool {

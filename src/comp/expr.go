@@ -65,10 +65,10 @@ func ExprList(elems []Expr) Expr {
 	}}
 }
 
-func ExprComp(loop *Loop) Expr {
+func ExprComp(loop *Loop, resAddr int) Expr {
 	// TODO: compose a name
 	return Expr{nextEID(), "", func() []Op {
-		return append(loop.Code(), OpLoad(loop.ResAddr()))
+		return append(loop.Code(), OpLoad(resAddr))
 	}}
 }
 

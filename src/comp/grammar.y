@@ -24,6 +24,7 @@ var gError *ParseError
 	num   float64
 	expr  Expr
 	exprs []Expr
+	loop  *Loop
 }
 
 %token EQ    // "=="
@@ -53,6 +54,7 @@ var gError *ParseError
 %type <exprs> expression_list
 %type <expr> object_field
 %type <exprs> object_field_list
+%type <loop> generator_list
 
 %start program
 
@@ -68,28 +70,28 @@ program:
 primary_expression:
       STRING
 	{
-		addr := gDecls.UseScalar()
+		addr := gDecls.UseAnon()
 		gMem.Store(addr, String($1))
 		$$ = ExprLoad(strconv.Quote($1), addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | NUMBER
 	{
-		addr := gDecls.UseScalar()
+		addr := gDecls.UseAnon()
 		gMem.Store(addr, Number($1))
 		$$ = ExprLoad(fmt.Sprintf("%v", $1), addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | TRUE
 	{
-		addr := gDecls.UseScalar()
+		addr := gDecls.UseAnon()
 		gMem.Store(addr, Bool(true))
 		$$ = ExprLoad("true", addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | FALSE
 	{
-		addr := gDecls.UseScalar()
+		addr := gDecls.UseAnon()
 		gMem.Store(addr, Bool(false))
 		$$ = ExprLoad("false", addr)
 		gDecls.SetType($$, ScalarType(0))
@@ -120,18 +122,10 @@ primary_expression:
 		gDecls.SameType(eids)
 		gDecls.SetType($$, ListType{TypeOfExpr(eids[0])})
 	}
-    | '[' expression '|' IDENT PROD expression ']'
+    | '[' expression '|' generator_list ']'
 	{
-		elemAddr := gDecls.Declare($4, TypeOfElem($6.Id))
-		listAddr := gDecls.UseScalar()
-		$$ = ExprComp(listAddr, $6, elemAddr, $2)
-		gDecls.SetType($$, ListType{TypeOfExpr($2.Id)})
-	}
-    | '[' expression '|' IDENT PROD expression ',' expression ']'
-	{
-		elemAddr := gDecls.Declare($4, TypeOfElem($6.Id))
-		listAddr := gDecls.UseScalar()
-		$$ = ExprCompSelect(listAddr, $6, elemAddr, $8, $2)
+		loop := $4.Return($2)
+		$$ = ExprComp(loop)
 		gDecls.SetType($$, ListType{TypeOfExpr($2.Id)})
 	}
     | '(' expression ')'
@@ -140,13 +134,13 @@ primary_expression:
 	}
     ;
 
-/*
 generator_list:
       IDENT PROD expression
 	{
 		gDecls.Strict(true)
-		addr := gDecls.Declare($1, TypeOfElem($3.Id))
-		$$ = ForEach(addr, $3)
+		varAddr := gDecls.Declare($1, TypeOfElem($3.Id))
+		resAddr := gDecls.UseAnon()
+		$$ = ForEach(resAddr, varAddr, $3)
 	}
     | generator_list ',' expression
 	{
@@ -154,11 +148,11 @@ generator_list:
 	}
     | generator_list ',' IDENT PROD expression
 	{
-		addr := gDecls.Declare($3, TypeOfElem($5.Id))
-		$$ = $1.Nest(addr, $5)
+		varAddr := gDecls.Declare($3, TypeOfElem($5.Id))
+		resAddr := gDecls.UseAnon()
+		$$ = $1.Nest(resAddr, varAddr, $5)
 	}
     ;
-*/
 
 object_field_list:
       object_field

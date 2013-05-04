@@ -65,53 +65,10 @@ func ExprList(elems []Expr) Expr {
 	}}
 }
 
-func ExprCompSelect(listAddr int, list Expr, elemAddr int, sel, ret Expr) Expr {
+func ExprComp(loop *Loop) Expr {
 	// TODO: compose a name
 	return Expr{nextEID(), "", func() []Op {
-		code := list.Code()
-		selCode := sel.Code()
-		retCode := ret.Code()
-
-		loopJump := 1 + len(selCode) + 2 + len(retCode) + 4
-		nextJump := -2 - len(retCode) - 2 - len(selCode) - 1
-		testJump := 1 + len(retCode) + 3
-
-		code = append(code, OpLoop(loopJump))
-		code = append(code, OpStore(elemAddr))
-		for _, c := range selCode {
-			code = append(code, c)
-		}
-		code = append(code, OpTest(testJump))
-		code = append(code, OpLoad(listAddr))
-		for _, c := range retCode {
-			code = append(code, c)
-		}
-		code = append(code, OpAppend)
-		code = append(code, OpStore(listAddr))
-		code = append(code, OpNext(nextJump))
-		return append(code, OpLoad(listAddr))
-	}}
-}
-
-func ExprComp(listAddr int, list Expr, elemAddr int, ret Expr) Expr {
-	// TODO: compose a name
-	return Expr{nextEID(), "", func() []Op {
-		code := list.Code()
-		retCode := ret.Code()
-
-		loopJump := 2 + len(retCode) + 4
-		nextJump := -2 - len(retCode) - 2
-
-		code = append(code, OpLoop(loopJump))
-		code = append(code, OpStore(elemAddr))
-		code = append(code, OpLoad(listAddr))
-		for _, c := range retCode {
-			code = append(code, c)
-		}
-		code = append(code, OpAppend)
-		code = append(code, OpStore(listAddr))
-		code = append(code, OpNext(nextJump))
-		return append(code, OpLoad(listAddr))
+		return append(loop.Code(), OpLoad(loop.ResAddr()))
 	}}
 }
 

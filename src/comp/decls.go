@@ -45,7 +45,7 @@ func (d *Decls) UseIdent(name string) int {
 	return d.find(name)
 }
 
-func (d *Decls) UseScalar() int {
+func (d *Decls) UseAnon() int {
 	name := fmt.Sprintf("+%d", len(d.idents))
 	return d.find(name)
 }

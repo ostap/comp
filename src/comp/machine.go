@@ -14,6 +14,70 @@ func (op Op) Arg() int {
 	return int(op & ^opMASK)
 }
 
+func (op Op) String() string {
+	switch op.Code() {
+	case OpList:
+		return "list"
+	case OpAppend:
+		return "append"
+	case OpNot:
+		return "not"
+	case OpNeg:
+		return "neg"
+	case OpPos:
+		return "pos"
+	case OpMul:
+		return "mul"
+	case OpDiv:
+		return "div"
+	case OpAdd:
+		return "add"
+	case OpSub:
+		return "sub"
+	case OpCat:
+		return "cat"
+	case OpLT:
+		return "lt"
+	case OpLTE:
+		return "lte"
+	case OpGT:
+		return "gt"
+	case OpGTE:
+		return "gte"
+	case OpEq:
+		return "eq"
+	case OpNEq:
+		return "neq"
+	case OpAnd:
+		return "and"
+	case OpOr:
+		return "or"
+
+	case opLoad:
+		return fmt.Sprintf("load %d", op.Arg())
+	case opStore:
+		return fmt.Sprintf("store %d", op.Arg())
+	case opObject:
+		return fmt.Sprintf("object %d", op.Arg())
+	case opSet:
+		return fmt.Sprintf("set %d", op.Arg())
+	case opGet:
+		return fmt.Sprintf("get %d", op.Arg())
+	case opLoop:
+		return fmt.Sprintf("loop %d", op.Arg())
+	case opNext:
+		return fmt.Sprintf("next %d", op.Arg())
+	case opTest:
+		return fmt.Sprintf("test %d", op.Arg())
+	case opMatch:
+		return fmt.Sprintf("match %d", op.Arg())
+	case opCall:
+		return fmt.Sprintf("call %d", op.Arg())
+	}
+
+	return fmt.Sprintf("UNKNOWN %x", op)
+}
+
 // Load a value from address addr (push a value on the stack).
 func OpLoad(addr int) Op {
 	return opLoad | Op(uint32(addr))

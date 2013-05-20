@@ -233,7 +233,7 @@ type Program struct {
 	code    []Op
 	data    []Value
 	regexps []*regexp.Regexp
-	// funcs []Func
+	funcs   []*Func
 }
 
 func (p *Program) Run() Value {
@@ -356,8 +356,10 @@ func (p *Program) Run() Value {
 			str := s.PopStr()
 			val := p.regexps[op.Arg()].MatchString(str)
 			s.PushBool(val)
+		case opCall:
+			p.funcs[op.Arg()].Eval(s)
 		default:
-			msg := fmt.Sprintf("unknown operation %x", op)
+			msg := fmt.Sprintf("unknown operation %v", op)
 			panic(msg)
 		}
 

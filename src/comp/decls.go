@@ -20,6 +20,7 @@ type Decls struct {
 	sameTypes [][]int64
 	values    []Value
 	regexps   []*regexp.Regexp
+	funcs     []*Func
 }
 
 func NewDecls() *Decls {
@@ -48,6 +49,11 @@ func (d *Decls) Declare(name string, v Value, t Type) int {
 	return addr
 }
 
+func (d *Decls) AddFunc(fn *Func) {
+	d.funcs = append(d.funcs, fn)
+	d.names[fn.Name] = fn.Type
+}
+
 func (d *Decls) RegExp(pattern string) (int, error) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
@@ -66,6 +72,26 @@ func (d *Decls) UseIdent(name string) int {
 	}
 
 	return d.find(name)
+}
+
+func (d *Decls) UseFunc(name string, eids []int64) int {
+	fn := -1
+	for i, _ := range d.funcs {
+		if d.funcs[i].Name == name {
+			fn = i
+			break
+		}
+	}
+
+	if fn < 0 {
+		d.err("unknown function %s", name)
+	} else if len(d.funcs[fn].Type.Args) != len(eids) {
+		d.err("function %v takes %v arguments", name, len(d.funcs[fn].Type.Args))
+	}
+
+	// TODO: check the argument types
+
+	return fn
 }
 
 func (d *Decls) UseField(eid int64, name string) *int {
@@ -200,23 +226,29 @@ func (d *Decls) resolve(t Type) (Type, bool) {
 	case TypeOfIdent:
 		return d.resolve(d.names[string(st)])
 	case TypeOfFunc:
-		ft, ok := d.resolve(d.names[string(st)])
-		if ok {
-			ft, isFunc := ft.(FuncType)
-			if isFunc {
-				return ft, true
-			}
-		}
-
-		return nil, false
+		return d.resolve(d.names[string(st)])
 	case ScalarType:
 		return ScalarType(st), true
 	case ListType:
 		t, ok := d.resolve(st.Elem)
 		return ListType{t}, ok
 	case FuncType:
-		t, ok := d.resolve(st.Result)
-		return FuncType{t}, ok
+		ret, ok := d.resolve(st.Return)
+		if ok {
+			args := make([]Type, len(st.Args))
+			for i, t := range st.Args {
+				rt, ok := d.resolve(t)
+				if !ok {
+					return nil, false
+				}
+
+				args[i] = rt
+			}
+
+			return FuncType{ret, args}, ok
+		}
+
+		return nil, false
 	case ObjectType:
 		ot := make(ObjectType, len(st))
 		for i, f := range st {

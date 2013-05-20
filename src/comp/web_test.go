@@ -147,7 +147,7 @@ func ExampleComps() {
 	run("[{i: i + 1, j: i} | i <- [j - 1 | j <- [1, 2, 3]]]")
 	run("[i * j | i <- [1, 2, 3], j <- [10, 20]]")
 	run("[i * j | i <- [1, 2, 3], j <- [10, 20], i == j / 10]")
-	// run("[i * j | i <- [1, 2, 3], trunc(i), j <- [10, 20]]")
+	run("[i * j | i <- [1, 2, 3], trunc(i), j <- [10, 20]]")
 
 	// Output:
 	// [1,2,3]
@@ -162,7 +162,6 @@ func ExampleComps() {
 	// [10,20,20,40,30,60]
 }
 
-/*
 func ExampleFuncs() {
 	run("lower(`HELLO`)")
 	run("upper(`hello`)")
@@ -175,7 +174,6 @@ func ExampleFuncs() {
 	// "hello"
 	// 1
 }
-*/
 
 func ExampleErrors() {
 	run("a")

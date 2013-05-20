@@ -11,9 +11,10 @@ type ListType struct {
 	Elem Type
 }
 
-// Function type specifies the type of its result value.
+// Function type specifies the type of its arguments and return value.
 type FuncType struct {
-	Result Type
+	Return Type
+	Args   []Type
 }
 
 // Object type specifies the types of all its fields.

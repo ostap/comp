@@ -74,12 +74,12 @@ func (s Store) Decls() *Decls {
 		decls.Declare(k, v, ListType{s.types[k]})
 	}
 
-	decls.Declare("trunc", nil, FuncType{ScalarType(0)})
-	decls.Declare("dist", nil, FuncType{ScalarType(0)})
-	decls.Declare("trim", nil, FuncType{ScalarType(0)})
-	decls.Declare("lower", nil, FuncType{ScalarType(0)})
-	decls.Declare("upper", nil, FuncType{ScalarType(0)})
-	decls.Declare("fuzzy", nil, FuncType{ScalarType(0)})
+	decls.AddFunc(FuncTrunc())
+	decls.AddFunc(FuncDist())
+	decls.AddFunc(FuncTrim())
+	decls.AddFunc(FuncLower())
+	decls.AddFunc(FuncUpper())
+	decls.AddFunc(FuncFuzzy())
 
 	return decls
 }

@@ -104,81 +104,16 @@ func (e Expr) Match(pattern string, re int) Expr {
 	}}
 }
 
-func (e Expr) Call(args []Expr) (expr Expr, err error) {
+func ExprCall(fn int, args []Expr) Expr {
 	// TODO: compose a name
-	expr = BadExpr
-	err = nil
+	return Expr{nextEID(), "", func() []Op {
+		code := make([]Op, 0)
+		for i := len(args) - 1; i > -1; i-- {
+			for _, c := range args[i].Code() {
+				code = append(code, c)
+			}
+		}
 
-	/* TODO: enable functions
-	switch e.Name {
-	case "trunc":
-		if len(args) == 1 {
-			e := args[0]
-			expr = Expr{nextEID(), "", func() []Op {
-				return Number(math.Trunc(ToNum(e, m)))
-			}}
-		} else {
-			err = fmt.Errorf("trunc takes only 1 argument")
-		}
-	case "dist":
-		if len(args) == 4 {
-			lat1expr := args[0]
-			lon1expr := args[1]
-			lat2expr := args[2]
-			lon2expr := args[3]
-
-			expr = Expr{nextEID(), "", func() []Op {
-				lat1 := ToNum(lat1expr, m)
-				lon1 := ToNum(lon1expr, m)
-				lat2 := ToNum(lat2expr, m)
-				lon2 := ToNum(lon2expr, m)
-
-				return Number(Dist(lat1, lon1, lat2, lon2))
-			}}
-		} else {
-			err = fmt.Errorf("dist takes only 4 arguments")
-		}
-	case "trim":
-		if len(args) == 1 {
-			e := args[0]
-			expr = Expr{nextEID(), "", func() []Op {
-				return String(strings.Trim(ToStr(e, m), " \t\n\r"))
-			}}
-		} else {
-			err = fmt.Errorf("trim takes only 1 argument")
-		}
-	case "lower":
-		if len(args) == 1 {
-			e := args[0]
-			expr = Expr{nextEID(), "", func() []Op {
-				return String(strings.ToLower(ToStr(e, m)))
-			}}
-		} else {
-			err = fmt.Errorf("lower takes only 1 argument")
-		}
-	case "upper":
-		if len(args) == 1 {
-			e := args[0]
-			expr = Expr{nextEID(), "", func() []Op {
-				return String(strings.ToUpper(ToStr(e, m)))
-			}}
-		} else {
-			err = fmt.Errorf("upper takes only 1 argument")
-		}
-	case "fuzzy":
-		if len(args) == 2 {
-			se := args[0]
-			te := args[1]
-			expr = Expr{nextEID(), "", func() []Op {
-				return Number(Fuzzy(ToStr(se, m), ToStr(te, m)))
-			}}
-		} else {
-			err = fmt.Errorf("fuzzy takes only 2 arguments")
-		}
-	default:
-		err = fmt.Errorf("unknown function %v(%d)", e.Name, len(args))
-	}
-	*/
-
-	return
+		return append(code, OpCall(fn))
+	}}
 }

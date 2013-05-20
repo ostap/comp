@@ -42,18 +42,19 @@ var gError *ParseError
 %token <str> IDENT
 %token <str> STRING
 
-%type <expr> primary_expression
-%type <expr> postfix_expression
-%type <expr> unary_expression
-%type <expr> multiplicative_expression
-%type <expr> additive_expression
-%type <expr> relational_expression
-%type <expr> equality_expression
-%type <expr> expression
-%type <exprs> expression_list
-%type <expr> object_field
-%type <exprs> object_field_list
-%type <loop> generator_list
+%type <expr>	primary_expression
+%type <expr>	postfix_expression
+%type <expr>	unary_expression
+%type <expr>	multiplicative_expression
+%type <expr>	additive_expression
+%type <expr>	relational_expression
+%type <expr>	equality_expression
+%type <expr>	expression
+%type <exprs>	expression_list
+%type <exprs>	expression_list_or_empty
+%type <expr>	object_field
+%type <exprs>	object_field_list
+%type <loop>	generator_list
 
 %start program
 
@@ -172,6 +173,16 @@ object_field:
 	}
     ;
 
+expression_list_or_empty:
+	{
+		$$ = nil
+	}
+    | expression_list
+	{
+		$$ = $1
+	}
+    ;
+
 expression_list:
       expression
 	{
@@ -194,24 +205,16 @@ postfix_expression:
 		$$ = $1.Field($3, pos)
 		gDecls.SetType($$, TypeOfField{$1.Id, $3})
 	}
-    | postfix_expression '(' ')'
+    | postfix_expression '(' expression_list_or_empty ')'
 	{
-		expr, err := $1.Call(nil)
-		if err == nil {
-			$$ = expr
-			gDecls.SetType($$, TypeOfFunc($1.Name))
-		} else {
-			parseError(err.Error())
+		eids := make([]int64, len($3))
+		for i, e := range $3 {
+			eids[i] = e.Id
 		}
-	}
-    | postfix_expression '(' expression_list ')'
-	{
-		expr, err := $1.Call($3)
-		if err == nil {
-			$$ = expr
+		fn := gDecls.UseFunc($1.Name, eids)
+		if fn > -1 {
+			$$ = ExprCall(fn, $3)
 			gDecls.SetType($$, TypeOfFunc($1.Name))
-		} else {
-			parseError(err.Error())
 		}
 	}
     ;
@@ -467,7 +470,7 @@ func Compile(expr string, decls *Decls) (*Program, *ParseError) {
 		if len(errors) > 0 {
 			gError = NewError(0, 0, "%v", errors[0])
 		} else {
-			prog = &Program{gExpr.Code(), gDecls.values, gDecls.regexps}
+			prog = &Program{gExpr.Code(), gDecls.values, gDecls.regexps, gDecls.funcs}
 		}
 	}
 

@@ -130,7 +130,9 @@ func (d *Decls) SetType(e Expr, t Type) {
 	d.code[e.Id] = e.Name
 }
 
-func (d *Decls) Verify() []string {
+func (d *Decls) Verify(resEID int64) (Type, []string) {
+	var resType Type = nil
+
 	// check identifiers
 	for _, n := range d.idents {
 		if d.names[n] == nil {
@@ -148,9 +150,11 @@ func (d *Decls) Verify() []string {
 
 	// resolve expression types
 	for eid, t := range d.exprs {
-		_, ok := d.resolve(t)
+		rt, ok := d.resolve(t)
 		if !ok {
 			d.err("cannot resolve type of '%v'", d.code[eid])
+		} else if eid == resEID {
+			resType = rt
 		}
 	}
 
@@ -174,7 +178,7 @@ func (d *Decls) Verify() []string {
 
 	// TODO: check sameTypes + web_test
 
-	return d.errors
+	return resType, d.errors
 }
 
 func (d *Decls) err(msg string, args ...interface{}) {

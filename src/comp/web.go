@@ -110,7 +110,7 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
 		decls := Store(fq).Decls()
-		prg, err := Compile(req.Expr, decls)
+		prg, rt, err := Compile(req.Expr, decls)
 		if err != nil {
 			info, _ := json.Marshal(err)
 			log.Printf("compilation error '%v'", req.Expr)
@@ -121,7 +121,7 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		res := prg.Run()
 		fmt.Fprintf(w, `{"result": `)
 		if res != nil {
-			if err := res.Quote(w); err != nil {
+			if err := res.Quote(w, rt); err != nil {
 				log.Printf("failed to marshal result: %v", err)
 			}
 		} else {

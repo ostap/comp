@@ -20,7 +20,7 @@ type Value interface {
 	List() List
 	Object() Object
 
-	Quote(w io.Writer) error
+	Quote(w io.Writer, t Type) error
 	// TODO: check reflexivity, symmetry, transitivity
 	Equals(v Value) Bool
 }
@@ -53,7 +53,7 @@ func (b Bool) Object() Object {
 	return Object{b}
 }
 
-func (b Bool) Quote(w io.Writer) error {
+func (b Bool) Quote(w io.Writer, t Type) error {
 	var err error
 	if b {
 		_, err = io.WriteString(w, "true")
@@ -92,7 +92,7 @@ func (n Number) Object() Object {
 	return Object{n}
 }
 
-func (n Number) Quote(w io.Writer) error {
+func (n Number) Quote(w io.Writer, t Type) error {
 	var err error
 	if math.IsInf(float64(n), 0) || math.IsNaN(float64(n)) {
 		_, err = fmt.Fprintf(w, `"%v"`, n)
@@ -128,7 +128,7 @@ func (s String) Object() Object {
 	return Object{s}
 }
 
-func (s String) Quote(w io.Writer) error {
+func (s String) Quote(w io.Writer, t Type) error {
 	_, err := io.WriteString(w, strconv.Quote(string(s)))
 	return err
 }
@@ -157,10 +157,15 @@ func (l List) Object() Object {
 	return nil
 }
 
-func (l List) Quote(w io.Writer) error {
+func (l List) Quote(w io.Writer, t Type) error {
 	_, err := io.WriteString(w, "[ ")
 	if err != nil {
 		return err
+	}
+
+	lt, isList := t.(ListType)
+	if !isList {
+		return fmt.Errorf("internal error: %v is not a list", t.Name())
 	}
 
 	for i, v := range l {
@@ -171,7 +176,7 @@ func (l List) Quote(w io.Writer) error {
 			}
 		}
 
-		if err := v.Quote(w); err != nil {
+		if err := v.Quote(w, lt.Elem); err != nil {
 			return err
 		}
 	}
@@ -215,10 +220,15 @@ func (o Object) Object() Object {
 	return o
 }
 
-func (o Object) Quote(w io.Writer) error {
+func (o Object) Quote(w io.Writer, t Type) error {
 	_, err := io.WriteString(w, "{ ")
 	if err != nil {
 		return err
+	}
+
+	ot, isObject := t.(ObjectType)
+	if !isObject {
+		return fmt.Errorf("internal error: %v is not an object", t.Name())
 	}
 
 	for i, v := range o {
@@ -229,12 +239,12 @@ func (o Object) Quote(w io.Writer) error {
 			}
 		}
 
-		_, err = fmt.Fprintf(w, `"%v": `, i)
+		_, err = fmt.Fprintf(w, `"%v": `, ot[i].Name)
 		if err != nil {
 			return err
 		}
 
-		if err := v.Quote(w); err != nil {
+		if err := v.Quote(w, ot[i].Type); err != nil {
 			return err
 		}
 	}

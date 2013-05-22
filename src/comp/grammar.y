@@ -450,7 +450,7 @@ func parseError(s string, v ...interface{}) {
 	gError = NewError(gLex.scan.Pos().Line, gLex.scan.Pos().Column, s, v...)
 }
 
-func Compile(expr string, decls *Decls) (*Program, *ParseError) {
+func Compile(expr string, decls *Decls) (*Program, Type, *ParseError) {
 	gMutex.Lock()
 	defer gMutex.Unlock()
 
@@ -466,13 +466,15 @@ func Compile(expr string, decls *Decls) (*Program, *ParseError) {
 
 	var prog *Program
 	if gError == nil {
-		errors := gDecls.Verify()
+		resType, errors := gDecls.Verify(gExpr.Id)
 		if len(errors) > 0 {
 			gError = NewError(0, 0, "%v", errors[0])
 		} else {
 			prog = &Program{gExpr.Code(), gDecls.values, gDecls.regexps, gDecls.funcs}
 		}
+
+		return prog, resType, gError
 	}
 
-	return prog, gError
+	return nil, nil, gError
 }

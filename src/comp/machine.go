@@ -5,14 +5,14 @@ import (
 	"regexp"
 )
 
-type Op int64
+type Op int
 
 func (op Op) Code() Op {
 	return op & opMASK
 }
 
 func (op Op) Arg() int {
-	return int(op & ^opMASK)
+	return int(op) >> opBITS
 }
 
 func (op Op) String() string {
@@ -76,66 +76,67 @@ func (op Op) String() string {
 		return fmt.Sprintf("call %d", op.Arg())
 	}
 
-	return fmt.Sprintf("UNKNOWN %x", op)
+	return fmt.Sprintf("unknown op=%x arg=%x (raw=%x)", op.Code(), op.Arg(), op)
 }
 
 // Load a value from address addr (push a value on the stack).
 func OpLoad(addr int) Op {
-	return opLoad | Op(uint32(addr))
+	return opLoad | Op(addr<<opBITS)
 }
 
 // Store the top of the stack into address addr.
 func OpStore(addr int) Op {
-	return opStore | Op(uint32(addr))
+	return opStore | Op(addr<<opBITS)
 }
 
 // Allocate a new object on the stack with that many fields.
 func OpObject(fields int) Op {
-	return opObject | Op(uint32(fields))
+	return opObject | Op(fields<<opBITS)
 }
 
 // Set a field of an object to a value from the stack.
 func OpSet(field int) Op {
-	return opSet | Op(uint32(field))
+	return opSet | Op(field<<opBITS)
 }
 
 // Get a field of an object and push it on the stack.
 func OpGet(field int) Op {
-	return opGet | Op(uint32(field))
+	return opGet | Op(field<<opBITS)
 }
 
 // Prepare for an iteration over a list from the stack.
 // Puts the first element from the list on the stack.
 func OpLoop(jump int) Op {
-	return opLoop | Op(uint32(jump))
+	return opLoop | Op(jump<<opBITS)
 }
 
 // Put the next element from a list (see OpLoop) on the stack and continue
 // with the iteration (jump to start).
 func OpNext(jump int) Op {
-	return opNext | Op(uint32(jump))
+	return opNext | Op(jump<<opBITS)
 }
 
 // Jump if the top of the stack is false.
 func OpTest(jump int) Op {
-	return opTest | Op(uint32(jump))
+	return opTest | Op(jump<<opBITS)
 }
 
 // Call a function. Takes arguments from the stack and puts a result back on the stack.
 func OpCall(fn int) Op {
-	return opCall | Op(uint32(fn))
+	return opCall | Op(fn<<opBITS)
 }
 
 // Match a regular expression re with the top of the stack.
 func OpMatch(re int) Op {
-	return opMatch | Op(uint32(re))
+	return opMatch | Op(re<<opBITS)
 }
 
 const (
-	opMASK = 0x7FFF000000000000
+	opBITS = 8
+	opMASK = 0x7F
 
-	OpList   Op = iota << 48 // Allocate a new list on the stack.
-	OpAppend                 // Append a value from the stack to the list on the stack.
+	OpList   Op = iota // Allocate a new list on the stack.
+	OpAppend           // Append a value from the stack to the list on the stack.
 	OpNot
 	OpNeg
 	OpPos

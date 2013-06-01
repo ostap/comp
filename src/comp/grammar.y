@@ -14,6 +14,7 @@ var gMutex sync.Mutex
 var gDecls *Decls
 var gLex   *lexer
 
+var gLID   int
 var gExpr  Expr
 var gError *ParseError
 %}
@@ -138,7 +139,8 @@ generator_list:
 	{
 		gDecls.Strict(true)
 		varAddr := gDecls.Declare($1, nil, TypeOfElem($3.Id))
-		$$ = ForEach(varAddr, $3)
+		$$ = ForEach(gLID, varAddr, $3)
+		gLID++
 	}
     | generator_list ',' expression
 	{
@@ -147,7 +149,8 @@ generator_list:
     | generator_list ',' IDENT PROD expression
 	{
 		varAddr := gDecls.Declare($3, nil, TypeOfElem($5.Id))
-		$$ = $1.Nest(varAddr, $5)
+		$$ = $1.Nest(gLID, varAddr, $5)
+		gLID++
 	}
     ;
 
@@ -454,6 +457,7 @@ func Compile(expr string, decls *Decls) (*Program, Type, *ParseError) {
 	gMutex.Lock()
 	defer gMutex.Unlock()
 
+	gLID = 0
 	gDecls = decls
 	gLex = &lexer{}
 
@@ -470,7 +474,9 @@ func Compile(expr string, decls *Decls) (*Program, Type, *ParseError) {
 		if len(errors) > 0 {
 			gError = NewError(0, 0, "%v", errors[0])
 		} else {
-			prog = &Program{gExpr.Code(), gDecls.values, gDecls.regexps, gDecls.funcs}
+			code := gExpr.Code()
+			loops := make([]*iterator, gLID)
+			prog = &Program{code, gDecls.values, gDecls.regexps, gDecls.funcs, loops}
 		}
 
 		return prog, resType, gError

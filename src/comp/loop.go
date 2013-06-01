@@ -25,6 +25,7 @@ Where L1, L2, T1, N1, N2 are relative code offsets (jumps):
   +--------<----------->-------+
 */
 type Loop struct {
+	lid     int
 	inner   *Loop
 	resAddr int
 	varAddr int
@@ -33,19 +34,21 @@ type Loop struct {
 	ret     Expr
 }
 
-func ForEach(varAddr int, list Expr) *Loop {
-	return &Loop{nil, -1, varAddr, list, nil, BadExpr}
+func ForEach(lid int, varAddr int, list Expr) *Loop {
+	return &Loop{lid, nil, -1, varAddr, list, nil, BadExpr}
 }
 
 func (l *Loop) Code() []Op {
 	code := l.list.Code()
+	clen := l.codeLen(-1)
 
-	// jump to the first instruction after the loop
-	loopJump := l.codeLen(-1) + 1
+	// jump to the first instruction _after_ the loop
+	loopJump := clen + 1 /* OpTest */ + 1
 	// jump back to the first instruction of the loop
-	nextJump := -(loopJump - 2)
+	nextJump := -clen
 
-	code = append(code, OpLoop(loopJump))
+	code = append(code, OpLoop(l.lid))
+	code = append(code, OpTest(loopJump))
 	code = append(code, OpStore(l.varAddr))
 
 	for i, s := range l.sel { // select(s)
@@ -68,11 +71,12 @@ func (l *Loop) Code() []Op {
 		code = append(code, OpStore(l.resAddr))
 	}
 
-	return append(code, OpNext(nextJump))
+	code = append(code, OpNext(l.lid))
+	return append(code, OpTest(nextJump))
 }
 
-func (l *Loop) Nest(varAddr int, list Expr) *Loop {
-	l.innermost().inner = &Loop{nil, -1, varAddr, list, nil, BadExpr}
+func (l *Loop) Nest(lid int, varAddr int, list Expr) *Loop {
+	l.innermost().inner = &Loop{lid, nil, -1, varAddr, list, nil, BadExpr}
 	return l
 }
 
@@ -97,6 +101,9 @@ func (l *Loop) innermost() *Loop {
 	return i
 }
 
+// codeLen calculates the length of the code after a test instruction. selPos
+// is the index of the select statement (left to right). passing -1 will
+// produce the length of the whole loop minus one (trailing OpTest).
 func (l *Loop) codeLen(selPos int) int {
 	jump := 0
 	if selPos < 0 {

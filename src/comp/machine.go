@@ -104,16 +104,17 @@ func OpGet(field int) Op {
 	return opGet | Op(field<<opBITS)
 }
 
-// Prepare for an iteration over a list from the stack.
-// Puts the first element from the list on the stack.
-func OpLoop(jump int) Op {
-	return opLoop | Op(jump<<opBITS)
+// Prepare for an iteration over a list from the stack. Puts the first element
+// from the list on the stack (if any) and pushes a boolean value indicating
+// whether the iteration is over.
+func OpLoop(lid int) Op {
+	return opLoop | Op(lid<<opBITS)
 }
 
-// Put the next element from a list (see OpLoop) on the stack and continue
-// with the iteration (jump to start).
-func OpNext(jump int) Op {
-	return opNext | Op(jump<<opBITS)
+// Push the next element from the list on the stack and push a boolean value
+// indicating success or failure (the same as in OpLoop).
+func OpNext(lid int) Op {
+	return opNext | Op(lid<<opBITS)
 }
 
 // Jump if the top of the stack is false.
@@ -171,9 +172,19 @@ type Stack struct {
 	top  int
 }
 
+func (s *Stack) Push(v Value) {
+	s.data[s.top] = v
+	s.top++
+}
+
 func (s *Stack) Pop() Value {
 	s.top--
 	return s.data[s.top]
+}
+
+func (s *Stack) PushBool(b bool) {
+	s.data[s.top] = Bool(b)
+	s.top++
 }
 
 func (s *Stack) PopBool() bool {
@@ -181,9 +192,29 @@ func (s *Stack) PopBool() bool {
 	return bool(s.data[s.top].Bool())
 }
 
+func (s *Stack) PushNum(n float64) {
+	s.data[s.top] = Number(n)
+	s.top++
+}
+
 func (s *Stack) PopNum() float64 {
 	s.top--
 	return float64(s.data[s.top].Number())
+}
+
+func (s *Stack) PushStr(str string) {
+	s.data[s.top] = String(str)
+	s.top++
+}
+
+func (s *Stack) PopStr() string {
+	s.top--
+	return string(s.data[s.top].String())
+}
+
+func (s *Stack) PushList(l List) {
+	s.data[s.top] = l
+	s.top++
 }
 
 func (s *Stack) PopList() List {
@@ -195,39 +226,14 @@ func (s *Stack) PopList() List {
 	return v.List()
 }
 
-func (s *Stack) PopStr() string {
-	s.top--
-	return string(s.data[s.top].String())
+func (s *Stack) PushObj(o Object) {
+	s.data[s.top] = o
+	s.top++
 }
 
-func (s *Stack) PopObject() Object {
+func (s *Stack) PopObj() Object {
 	s.top--
 	return s.data[s.top].Object()
-}
-
-func (s *Stack) Push(v Value) {
-	s.data[s.top] = v
-	s.top++
-}
-
-func (s *Stack) PushList(l List) {
-	s.data[s.top] = l
-	s.top++
-}
-
-func (s *Stack) PushNum(n float64) {
-	s.data[s.top] = Number(n)
-	s.top++
-}
-
-func (s *Stack) PushBool(b bool) {
-	s.data[s.top] = Bool(b)
-	s.top++
-}
-
-func (s *Stack) PushStr(str string) {
-	s.data[s.top] = String(str)
-	s.top++
 }
 
 type Program struct {
@@ -235,6 +241,12 @@ type Program struct {
 	data    []Value
 	regexps []*regexp.Regexp
 	funcs   []*Func
+	loops   []*iterator
+}
+
+type iterator struct {
+	pos  int
+	list List
 }
 
 func (p *Program) Run() Value {
@@ -246,12 +258,12 @@ func (p *Program) Run() Value {
 
 		switch op.Code() {
 		case OpList:
-			s.Push(make(List, 0))
+			s.PushList(make(List, 0))
 		case OpAppend:
 			val := s.Pop()
 			list := s.PopList()
 			list = append(list, val)
-			s.Push(list)
+			s.PushList(list)
 		case OpNot:
 			s.PushBool(!s.PopBool())
 		case OpNeg:
@@ -318,35 +330,32 @@ func (p *Program) Run() Value {
 		case opStore:
 			p.data[op.Arg()] = s.Pop()
 		case opObject:
-			s.Push(make(Object, op.Arg()))
+			s.PushObj(make(Object, op.Arg()))
 		case opSet:
 			val := s.Pop()
-			obj := s.PopObject()
+			obj := s.PopObj()
 			obj[op.Arg()] = val
-			s.Push(obj)
+			s.PushObj(obj)
 		case opGet:
-			obj := s.PopObject()
+			obj := s.PopObj()
 			s.Push(obj[op.Arg()])
 		case opLoop:
 			list := s.PopList()
 			if len(list) > 0 {
-				s.Push(list)
-				s.PushNum(1)
+				p.loops[op.Arg()] = &iterator{1, list}
 				s.Push(list[0])
+				s.PushBool(true)
 			} else {
-				i += op.Arg()
-				jump = true
+				s.PushBool(false)
 			}
 		case opNext:
-			idx := s.PopNum()
-			list := s.PopList()
-			if int(idx) > -1 && int(idx) < len(list) {
-				s.PushList(list)
-				s.PushNum(idx + 1)
-				s.Push(list[int(idx)])
-
-				i += op.Arg()
-				jump = true
+			i := p.loops[op.Arg()]
+			if i.pos > -1 && i.pos < len(i.list) {
+				s.Push(i.list[i.pos])
+				s.PushBool(false)
+				i.pos++
+			} else {
+				s.PushBool(true)
 			}
 		case opTest:
 			if !s.PopBool() {

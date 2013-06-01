@@ -67,7 +67,7 @@ func (l *Loop) Code() []Op {
 		for _, c := range l.ret.Code() {
 			code = append(code, c)
 		}
-		code = append(code, OpAppend)
+		code = append(code, OpAppend())
 		code = append(code, OpStore(l.resAddr))
 	}
 

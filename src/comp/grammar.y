@@ -229,17 +229,17 @@ unary_expression:
 	}
     | '!' postfix_expression
 	{
-		$$ = $2.Unary(OpNot, "!")
+		$$ = $2.Unary(OpNot(), "!")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | '-' postfix_expression
 	{
-		$$ = $2.Unary(OpNeg, "-")
+		$$ = $2.Unary(OpNeg(), "-")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | '+' postfix_expression
 	{
-		$$ = $2.Unary(OpPos, "+")
+		$$ = $2.Unary(OpPos(), "+")
 		gDecls.SetType($$, ScalarType(0))
 	}
     ;
@@ -251,12 +251,12 @@ multiplicative_expression:
 	}
     | multiplicative_expression '*' unary_expression
 	{
-		$$ = $1.Binary($3, OpMul, "*")
+		$$ = $1.Binary($3, OpMul(), "*")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | multiplicative_expression '/' unary_expression
 	{
-		$$ = $1.Binary($3, OpDiv, "/")
+		$$ = $1.Binary($3, OpDiv(), "/")
 		gDecls.SetType($$, ScalarType(0))
 	}
     ;
@@ -268,17 +268,17 @@ additive_expression:
 	}
     | additive_expression '+' multiplicative_expression
 	{
-		$$ = $1.Binary($3, OpAdd, "+")
+		$$ = $1.Binary($3, OpAdd(), "+")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | additive_expression '-' multiplicative_expression
 	{
-		$$ = $1.Binary($3, OpSub, "-")
+		$$ = $1.Binary($3, OpSub(), "-")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | additive_expression CAT multiplicative_expression
 	{
-		$$ = $1.Binary($3, OpCat, "++")
+		$$ = $1.Binary($3, OpCat(), "++")
 		gDecls.SetType($$, ScalarType(0))
 	}
     ;
@@ -290,22 +290,22 @@ relational_expression:
 	}
     | relational_expression '<' additive_expression
 	{
-		$$ = $1.Binary($3, OpLT, "<")
+		$$ = $1.Binary($3, OpLT(), "<")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | relational_expression '>' additive_expression
 	{
-		$$ = $1.Binary($3, OpGT, ">")
+		$$ = $1.Binary($3, OpGT(), ">")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | relational_expression LTE additive_expression
 	{
-		$$ = $1.Binary($3, OpLTE, "<=")
+		$$ = $1.Binary($3, OpLTE(), "<=")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | relational_expression GTE additive_expression
 	{
-		$$ = $1.Binary($3, OpGTE, ">=")
+		$$ = $1.Binary($3, OpGTE(), ">=")
 		gDecls.SetType($$, ScalarType(0))
 	}
     ;
@@ -317,12 +317,12 @@ equality_expression:
 	}
     | equality_expression EQ relational_expression
 	{
-		$$ = $1.Binary($3, OpEq, "==")
+		$$ = $1.Binary($3, OpEq(), "==")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | equality_expression NEQ relational_expression
 	{
-		$$ = $1.Binary($3, OpNEq, "!=")
+		$$ = $1.Binary($3, OpNEq(), "!=")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | equality_expression MATCH STRING
@@ -344,12 +344,12 @@ expression:
 	}
     | expression AND equality_expression
 	{
-		$$ = $1.Binary($3, OpAnd, "&&")
+		$$ = $1.Binary($3, OpAnd(), "&&")
 		gDecls.SetType($$, ScalarType(0))
 	}
     | expression OR equality_expression
 	{
-		$$ = $1.Binary($3, OpOr, "||")
+		$$ = $1.Binary($3, OpOr(), "||")
 		gDecls.SetType($$, ScalarType(0))
 	}
     ;

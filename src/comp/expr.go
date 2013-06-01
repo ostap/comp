@@ -53,12 +53,12 @@ func ExprObject(fields []Expr) Expr {
 func ExprList(elems []Expr) Expr {
 	// TODO: compose a name
 	return Expr{nextEID(), "", func() []Op {
-		code := []Op{OpList}
+		code := []Op{OpList()}
 		for _, e := range elems {
 			for _, c := range e.Code() {
 				code = append(code, c)
 			}
-			code = append(code, OpAppend)
+			code = append(code, OpAppend())
 		}
 
 		return code

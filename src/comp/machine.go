@@ -151,24 +151,25 @@ func (p *Program) Run() Value {
 			s.PushObj(obj)
 		case opGet:
 			obj := s.PopObj()
-			s.Push(obj[op.Arg])
+			val := obj[op.Arg]
+			s.Push(val)
 		case opLoop:
 			list := s.PopList()
 			if len(list) > 0 {
 				p.loops[op.Arg] = &iterator{1, list}
 				s.Push(list[0])
-				s.PushBool(true)
+				s.Push(True)
 			} else {
-				s.PushBool(false)
+				s.Push(False)
 			}
 		case opNext:
 			i := p.loops[op.Arg]
 			if i.pos > -1 && i.pos < len(i.list) {
 				s.Push(i.list[i.pos])
-				s.PushBool(false)
+				s.Push(False)
 				i.pos++
 			} else {
-				s.PushBool(true)
+				s.Push(True)
 			}
 		case opTest:
 			if !s.PopBool() {

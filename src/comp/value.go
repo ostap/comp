@@ -13,6 +13,9 @@ type String string
 type List []Value
 type Object []Value
 
+var True Value = Bool(true)
+var False Value = Bool(false)
+
 type Value interface {
 	Bool() Bool
 	String() String

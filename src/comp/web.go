@@ -95,6 +95,8 @@ func (c Console) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
+
 	if r.Method == "POST" {
 		dec := json.NewDecoder(r.Body)
 

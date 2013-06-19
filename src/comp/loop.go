@@ -25,30 +25,37 @@ Where L1, L2, T1, N1, N2 are relative code offsets (jumps):
   +--------<----------->-------+
 */
 type Loop struct {
-	lid     int
-	inner   *Loop
-	resAddr int
-	varAddr int
-	list    Expr
-	sel     []Expr
-	ret     Expr
+	lid      int
+	inner    *Loop
+	resAddr  int
+	varAddr  int
+	list     Expr
+	sel      []Expr
+	ret      Expr
+	parallel bool
 }
 
 func ForEach(lid int, varAddr int, list Expr) *Loop {
-	return &Loop{lid, nil, -1, varAddr, list, nil, BadExpr}
+	return &Loop{lid, nil, -1, varAddr, list, nil, BadExpr, false}
 }
 
 func (l *Loop) Code() []Op {
 	code := l.list.Code()
 	clen := l.codeLen(-1)
 
-	// jump to the first instruction _after_ the loop
-	loopJump := clen + 1 /* OpTest */ + 1
-	// jump back to the first instruction of the loop
+	// jump over the loop
+	loopJump := clen + 1 /* OpNext */ + 1 /* next instruction after the loop */
+	// jump back to beginning
 	nextJump := -clen
 
+	parallel := 0
+	if l.parallel {
+		parallel = 1
+	}
+
+	code = append(code, OpArg(loopJump))
+	code = append(code, OpArg(parallel))
 	code = append(code, OpLoop(l.lid))
-	code = append(code, OpTest(loopJump))
 	code = append(code, OpStore(l.varAddr))
 
 	for i, s := range l.sel { // select(s)
@@ -71,12 +78,12 @@ func (l *Loop) Code() []Op {
 		code = append(code, OpStore(l.resAddr))
 	}
 
-	code = append(code, OpNext(l.lid))
-	return append(code, OpTest(nextJump))
+	code = append(code, OpArg(nextJump))
+	return append(code, OpNext(l.lid))
 }
 
 func (l *Loop) Nest(lid int, varAddr int, list Expr) *Loop {
-	l.innermost().inner = &Loop{lid, nil, -1, varAddr, list, nil, BadExpr}
+	l.innermost().inner = &Loop{lid, nil, -1, varAddr, list, nil, BadExpr, false}
 	return l
 }
 
@@ -101,9 +108,9 @@ func (l *Loop) innermost() *Loop {
 	return i
 }
 
-// codeLen calculates the length of the code after a test instruction. selPos
-// is the index of the select statement (left to right). passing -1 will
-// produce the length of the whole loop minus one (trailing OpTest).
+// codeLen calculates the jump from a test instruction. selPos is the index
+// of a select statement (left to right). passing -1 will calculate the length
+// of the whole loop.
 func (l *Loop) codeLen(selPos int) int {
 	jump := 0
 	if selPos < 0 {
@@ -120,5 +127,5 @@ func (l *Loop) codeLen(selPos int) int {
 		jump += 1 /* OpLoad */ + len(l.ret.Code()) + 1 /* OpAppend */ + 1 /* OpStore */
 	}
 
-	return jump + 1 /* OpNext */
+	return jump + 1 /* OpArg */
 }

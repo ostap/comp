@@ -120,7 +120,7 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		res := prg.Run()
+		res := prg.Run(new(Stack))
 		fmt.Fprintf(w, `{"result": `)
 		if res != nil {
 			if err := res.Quote(w, rt); err != nil {

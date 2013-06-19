@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"regexp"
+	"runtime"
 )
 
 // instructions
@@ -27,17 +29,15 @@ const (
 	opOr
 	opLoad   // load a value from address addr (push a value on the stack)
 	opStore  // store a value from the top of the stack into a memory address
-	opObject // Allocate a new object on the stack with that many fields.
-	opSet    // Set a field of an object to a value from the stack.
-	opGet    // Get a field of an object and push it on the stack.
-	opLoop   /* Prepare for iteration over a list from the stack. Pushes the first element
-	   from the list on the stack (if any) and pushes a boolean value indicating
-	   whether the iteration is over. */
-	opNext /* Push the next element from the list on the stack and push a boolean value
-	   indicating success or failure (the same as in OpLoop). */
-	opTest  // Jump if the top of the stack is false.
-	opMatch // Match a regular expression re with the top of the stack.
-	opCall  // Call a function. Takes arguments from the stack and puts a result back on the stack.
+	opObject // allocate a new object on the stack with that many fields
+	opSet    // set a field of an object to a value from the stack
+	opGet    // get a field of an object and push it on the stack
+	opLoop   // prepare for iteration over a list from the stack
+	opNext   // push the next element from the list on the stack and jump to op.Arg
+	opTest   // jump to op.Arg if the top of the stack is false
+	opMatch  // match a regular expression re with the top of the stack.
+	opCall   // call a function taking arguments from the stack and pushing the result back
+	opArg    // pass an integer value (op.Arg) to the next instruction (push)
 )
 
 type Op struct {
@@ -60,11 +60,11 @@ type Stack struct {
 
 type iterator struct {
 	pos  int
+	step int
 	list List
 }
 
-func (p *Program) Run() Value {
-	s := new(Stack)
+func (p *Program) Run(s *Stack) Value {
 	i := 0
 	for i > -1 && i < len(p.code) {
 		op := p.code[i]
@@ -153,23 +153,67 @@ func (p *Program) Run() Value {
 			obj := s.PopObj()
 			val := obj[op.Arg]
 			s.Push(val)
+		case opArg:
+			s.Push(Number(op.Arg))
 		case opLoop:
+			parallel := s.PopBool()
+			offset := int(s.PopNum())
 			list := s.PopList()
+			lid := op.Arg
+
 			if len(list) > 0 {
-				p.loops[op.Arg] = &iterator{1, list}
-				s.Push(list[0])
-				s.Push(True)
+				if parallel {
+					cores := runtime.NumCPU()
+					if cores > len(list) {
+						cores = len(list)
+					}
+
+					ch := make(chan Value)
+					for c := 0; c < cores; c++ {
+						pc := p.Clone(i+1, i+1+offset)
+						pc.loops[lid] = &iterator{cores + c, cores, list}
+
+						sc := s.Clone()
+						sc.Push(list[c])
+
+						go func(_p *Program, _s *Stack) {
+							ch <- _p.Run(_s)
+						}(pc, sc)
+					}
+
+					var res List
+					for c := 0; c < cores; c++ {
+						part := <-ch
+						if part == nil {
+							continue
+						}
+
+						for _, v := range part.List() {
+							res = append(res, v)
+						}
+					}
+
+					s.PushList(res)
+
+					i += offset + 1
+					jump = true
+				} else {
+					p.loops[lid] = &iterator{1, 1, list}
+					s.Push(list[0])
+				}
 			} else {
-				s.Push(False)
+				i += offset
+				jump = true
 			}
 		case opNext:
-			i := p.loops[op.Arg]
-			if i.pos > -1 && i.pos < len(i.list) {
-				s.Push(i.list[i.pos])
-				s.Push(False)
-				i.pos++
-			} else {
-				s.Push(True)
+			offset := int(s.PopNum())
+			loop := p.loops[op.Arg]
+			if loop.pos > -1 && loop.pos < len(loop.list) {
+				s.Push(loop.list[loop.pos])
+				loop.pos += loop.step
+
+				i += offset
+				jump = true
 			}
 		case opTest:
 			if !s.PopBool() {
@@ -193,6 +237,42 @@ func (p *Program) Run() Value {
 	}
 
 	return s.Pop()
+}
+
+func (p *Program) log() {
+	log.Printf("program %p", p)
+	for x := 0; x < len(p.code); x++ {
+		log.Printf("%2d %v", x, p.code[x])
+	}
+}
+
+func (p *Program) Clone(from, to int) *Program {
+	// TODO: deep copy
+	res := new(Program)
+	res.code = p.code[from:to]
+	res.data = make([]Value, len(p.data))
+	res.regexps = make([]*regexp.Regexp, len(p.regexps))
+	res.funcs = make([]*Func, len(p.funcs))
+	res.loops = make([]*iterator, len(p.loops))
+
+	copy(res.data, p.data)
+	for i, re := range p.regexps {
+		res.regexps[i] = regexp.MustCompile(re.String())
+	}
+	copy(res.funcs, p.funcs)
+
+	return res
+}
+
+func (s *Stack) Clone() *Stack {
+	res := new(Stack)
+	for i := 0; i < s.top; i++ {
+		// TODO: deep copy
+		res.data[i] = s.data[i]
+	}
+	res.top = s.top
+
+	return res
 }
 
 func (op Op) String() string {
@@ -253,9 +333,11 @@ func (op Op) String() string {
 		return fmt.Sprintf("match %d", op.Arg)
 	case opCall:
 		return fmt.Sprintf("call %d", op.Arg)
+	case opArg:
+		return fmt.Sprintf("arg %d", op.Arg)
 	}
 
-	return fmt.Sprintf("unknown op=%x arg=%x (raw=%x)", op.Code, op.Arg, op)
+	return fmt.Sprintf("unknown op=%d arg=%d", op.Code, op.Arg)
 }
 
 func OpList() Op {
@@ -368,6 +450,10 @@ func OpCall(fn int) Op {
 
 func OpMatch(re int) Op {
 	return Op{opMatch, re}
+}
+
+func OpArg(arg int) Op {
+	return Op{opArg, arg}
 }
 
 func (s *Stack) Push(v Value) {

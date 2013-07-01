@@ -105,11 +105,16 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		var req struct {
 			Expr  string `json:"expr"`
-			Limit int    `json:"limit"`
+			Limit *int   `json:"limit"`
 		}
 		if err := dec.Decode(&req); err != nil {
 			badReq(w, `{"error": %v}`, strconv.Quote("invalid request object: "+err.Error()))
 			return
+		}
+
+		limit := -1
+		if req.Limit != nil {
+			limit = *req.Limit
 		}
 
 		start := time.Now()
@@ -126,7 +131,7 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		res := prg.Run(new(Stack))
 		fmt.Fprintf(w, `{"result": `)
 		if res != nil {
-			if err := res.Quote(w, rt, req.Limit); err != nil {
+			if err := res.Quote(w, rt, limit); err != nil {
 				log.Printf("failed to marshal result: %v", err)
 			}
 		} else {

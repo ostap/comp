@@ -4,7 +4,7 @@ comp is a tool for querying information from files. It's main goal is
 to provide a unified interface to the variety of data representations found
 in public data sets. To achieve this goal comp introduces a small query
 language with type coercion (e.g. "2" + 2 == 4) and a powerful iteration
-mechanism based on [list comprehensions][1].
+mechanism based on [list comprehensions][0].
 
     $ comp -bind=:9090
     $ curl -d '{"expr": "\"2\" + 2"}' http://localhost:9090/full
@@ -17,7 +17,7 @@ mechanism based on [list comprehensions][1].
 to load a tab delimited file and query its contents:
 
     $ comp -data=contacts.txt -bind=:9090
-    $ curl -d '[ c | c <- contacts, c.zip == 8001]' http://localhost:9090/full
+    $ curl -d '{"expr": "[ c | c <- contacts, c.zip == 8001]"}' http://localhost:9090/full
 
 ### build and test
 
@@ -29,12 +29,13 @@ to load a tab delimited file and query its contents:
 ### acknowledgements
 
 comp language borrows ideas from other programming languages (Haskell,
-JavaScript and probably others), but its core (application of comprehensions
-to formulate queries) is based on a research paper by Peter Buneman
-["comprehension syntax"][1]. I explored this paper thanks to feedback
+JavaScript and probably others), but its core - the application of
+comprehensions to formulate queries - is based on a research paper by Peter
+Buneman "[Comprehension Syntax][1]". I explored this paper thanks to feedback
 provided by [Ted Leung][2] after the [Emerging Languages Camp][3] regarding
 [Bandicoot][4].
 
+[0]: http://en.wikipedia.org/wiki/List_comprehension "List Comprehension"
 [1]: http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.26.993 "Comprehension Syntax (1994), by Peter Buneman , Leonid Libkin, Dan Suciu, Val Tannen, Limsoon Wong"
 [2]: http://www.sauria.com/blog/2012/09/27/strange-loop-2012/ "Ted Leung's Blog"
 [3]: https://thestrangeloop.com/preconf "Emerging Languages Camp"

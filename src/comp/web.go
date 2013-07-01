@@ -126,7 +126,7 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		res := prg.Run(new(Stack))
 		fmt.Fprintf(w, `{"result": `)
 		if res != nil {
-			if err := res.Quote(w, rt); err != nil {
+			if err := res.Quote(w, rt, req.Limit); err != nil {
 				log.Printf("failed to marshal result: %v", err)
 			}
 		} else {

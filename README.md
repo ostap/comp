@@ -19,6 +19,8 @@ to load a tab delimited file and query its contents:
     $ comp -data=contacts.txt -bind=:9090
     $ curl -d '[ c | c <- contacts, c.zip == 8001]' http://localhost:9090/full
 
+to run the queries through an interactive web interface open the http://localhost:9090/console in your browser.
+
 ### build and test
 
     $ cd comp && export GOPATH=$GOPATH:$(pwd)
@@ -28,12 +30,17 @@ to load a tab delimited file and query its contents:
 
 ### acknowledgements
 
+comp tool was developed for the purpose of [mingle.io - Query API for Open Data](https://mingle.io) as the backend 
+behind the service. It allows mingle.io users to run arbitrary queries across variety of Open Data sets and mix them
+together to enrich applications with quality information.
+
 comp language borrows ideas from other programming languages (Haskell,
 JavaScript and probably others), but its core (application of comprehensions
 to formulate queries) is based on a research paper by Peter Buneman
 ["comprehension syntax"][1]. I explored this paper thanks to feedback
 provided by [Ted Leung][2] after the [Emerging Languages Camp][3] regarding
 [Bandicoot][4].
+
 
 [1]: http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.26.993 "Comprehension Syntax (1994), by Peter Buneman , Leonid Libkin, Dan Suciu, Val Tannen, Limsoon Wong"
 [2]: http://www.sauria.com/blog/2012/09/27/strange-loop-2012/ "Ted Leung's Blog"

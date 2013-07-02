@@ -41,7 +41,6 @@ to formulate queries) is based on a research paper by Peter Buneman
 provided by [Ted Leung][2] after the [Emerging Languages Camp][3] regarding
 [Bandicoot][4].
 
-
 [1]: http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.26.993 "Comprehension Syntax (1994), by Peter Buneman , Leonid Libkin, Dan Suciu, Val Tannen, Limsoon Wong"
 [2]: http://www.sauria.com/blog/2012/09/27/strange-loop-2012/ "Ted Leung's Blog"
 [3]: https://thestrangeloop.com/preconf "Emerging Languages Camp"

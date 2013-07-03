@@ -125,7 +125,9 @@ func ExampleObjects() {
 	run(`{id: 1, name: "foo"}`)
 	run(`{id: 1, children: [2, 3]}`)
 	run(`{id: 1, name: "foo"}.id`)
+	run(`{id: 1, name: "foo"}["id"]`)
 	run(`{id: 1, name: "foo"}.name`)
+	run(`{id: 1, name: "foo"}["name"]`)
 	run(`{id: 1, children: [2,3]}.children`)
 	run(`{id: 1, obj: {parent: 1, value: "hello"}}.obj`)
 	run(`{id: 1, obj: {parent: 1, value: "hello"}}.obj.value`)
@@ -134,6 +136,8 @@ func ExampleObjects() {
 	// {"id":1,"name":"foo"}
 	// {"children":[2,3],"id":1}
 	// 1
+	// 1
+	// "foo"
 	// "foo"
 	// [2,3]
 	// {"parent":1,"value":"hello"}

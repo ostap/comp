@@ -38,8 +38,8 @@ type Loop struct {
 	parallel bool
 }
 
-func ForEach(lid int, varAddr int, list Expr) *Loop {
-	return &Loop{lid, nil, -1, varAddr, list, nil, BadExpr, false}
+func ForEach(lid int, varAddr int, list Expr, parallel bool) *Loop {
+	return &Loop{lid, nil, -1, varAddr, list, nil, BadExpr, parallel}
 }
 
 func (l *Loop) Code() []Op {
@@ -85,8 +85,8 @@ func (l *Loop) Code() []Op {
 	return append(code, OpNext(l.lid))
 }
 
-func (l *Loop) Nest(lid int, varAddr int, list Expr) *Loop {
-	l.innermost().inner = &Loop{lid, nil, -1, varAddr, list, nil, BadExpr, false}
+func (l *Loop) Nest(lid int, varAddr int, list Expr, parallel bool) *Loop {
+	l.innermost().inner = &Loop{lid, nil, -1, varAddr, list, nil, BadExpr, parallel}
 	return l
 }
 

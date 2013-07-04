@@ -25,22 +25,24 @@ var gError *ParseError
 %union {
 	str   string
 	num   float64
+	bin   bool
 	expr  Expr
 	exprs []Expr
 	loop  *Loop
 }
 
-%token EQ    // "=="
-%token NEQ   // "!="
-%token MATCH // "=~"
-%token PROD  // "<-"
-%token LTE   // "<="
-%token GTE   // ">="
-%token CAT   // "++"
-%token AND   // "&&"
-%token OR    // "||"
-%token TRUE  // "true"
-%token FALSE // "false"
+%token EQ	// "=="
+%token NEQ	// "!="
+%token MATCH	// "=~"
+%token PROD_SEQ	// "<-"
+%token PROD_PAR	// "<~"
+%token LTE	// "<="
+%token GTE	// ">="
+%token CAT	// "++"
+%token AND	// "&&"
+%token OR	// "||"
+%token TRUE	// "true"
+%token FALSE	// "false"
 
 %token <num> NUMBER
 %token <str> IDENT
@@ -58,6 +60,7 @@ var gError *ParseError
 %type <exprs>	expression_list_or_empty
 %type <expr>	object_field
 %type <exprs>	object_field_list
+%type <bin>	generator
 %type <loop>	generator_list
 
 %start program
@@ -138,23 +141,28 @@ primary_expression:
     ;
 
 generator_list:
-      IDENT PROD expression
+      IDENT generator expression
 	{
 		gDecls.Strict(true)
 		varAddr := gDecls.Declare($1, nil, TypeOfElem($3.Id))
-		$$ = ForEach(gLID, varAddr, $3)
+		$$ = ForEach(gLID, varAddr, $3, $2)
 		gLID++
 	}
     | generator_list ',' expression
 	{
 		$$ = $1.Select($3)
 	}
-    | generator_list ',' IDENT PROD expression
+    | generator_list ',' IDENT generator expression
 	{
 		varAddr := gDecls.Declare($3, nil, TypeOfElem($5.Id))
-		$$ = $1.Nest(gLID, varAddr, $5)
+		$$ = $1.Nest(gLID, varAddr, $5, $4)
 		gLID++
 	}
+    ;
+
+generator:
+      PROD_SEQ { $$ = false }
+    | PROD_PAR { $$ = true }
     ;
 
 object_field_list:
@@ -396,7 +404,10 @@ func (l *lexer) Lex(yylval *comp_SymType) int {
 	case '<':
 		if l.scan.Peek() == '-' {
 			l.scan.Next()
-			return PROD
+			return PROD_SEQ
+		} else if l.scan.Peek() == '~' {
+			l.scan.Next()
+			return PROD_PAR
 		} else if l.scan.Peek() == '=' {
 			l.scan.Next()
 			return LTE

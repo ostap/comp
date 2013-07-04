@@ -71,7 +71,6 @@ func ExprList(elems []Expr) Expr {
 func ExprComp(loop *Loop, resAddr int) Expr {
 	// TODO: compose a name
 	return Expr{nextEID(), "", func() []Op {
-		loop.parallel = true // the outermost loop
 		return append(loop.Code(), OpLoad(resAddr))
 	}}
 }

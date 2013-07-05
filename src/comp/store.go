@@ -108,12 +108,7 @@ func readHead(fileName string) (ObjectType, error) {
 	fields := strings.Split(str, "\t")
 	res := make(ObjectType, len(fields))
 	for i, f := range fields {
-		f = strings.Trim(f, " \r\n")
-		if !IsIdent(f) {
-			return nil, fmt.Errorf("invalid field name: '%v'", f)
-		}
-
-		res[i].Name = f
+		res[i].Name = strings.Trim(f, " \r\n")
 		res[i].Type = ScalarType(0)
 	}
 

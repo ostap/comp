@@ -1,4 +1,4 @@
-// Copyright (c) 2013 Julius Chrobak. You can use this source code
+// Copyright (c) 2013 Ostap Cherkashin. You can use this source code
 // under the terms of the MIT License found in the LICENSE file.
 
 %{

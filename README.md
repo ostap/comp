@@ -1,6 +1,6 @@
 ### comp
 
-comp is a tool for querying information from files. It's main goal is
+comp is a tool for querying information from files. Its main goal is
 to provide a unified interface to the variety of data representations found
 in public data sets. To achieve this goal comp introduces a small query
 language with type coercion (e.g. "2" + 2 == 4) and a powerful iteration
@@ -20,6 +20,31 @@ to load a tab delimited file and query its contents:
     $ curl -d '{"expr": "[ c | c <- contacts, c.zip == 8001]"}' http://localhost:9090/full
 
 you can also run queries through a web console on `http://localhost:9090/console`.
+
+### syntax overview
+
+comp defines the following types:
+  * scalar - `53`, `3.14`, `"hello"`, `true`
+  * list - `[10, 20, 30]`, `["a", "b"]`
+  * object - `{id: 123, name: "hello"}`
+
+and the following operators:
+  * `!` - not
+  * `* /` - multiply, divide
+  * `+ - ++` - addition, subtraction, string concatenation
+  * `< <= > >=` - less than [or equal], greater than [or equal]
+  * `== != =~` - [not] equal, regular expression match
+  * `&& ||` - logical and, logical or
+
+A list comprehension is a constructs of the following form:
+    [ e | g1, g2, ..., gN ]
+
+pronounced as "a list of all e where g1 and g2 ... and gN", where `e`
+represents an expression and `gX` is either an iteration over a list
+or a boolean expression:
+
+    [i*2 | i <- [1, 2, 3], i != 2]
+    [1, 6]
 
 ### build and test
 

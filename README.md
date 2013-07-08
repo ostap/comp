@@ -37,6 +37,7 @@ and the following operators:
   * `&& ||` - logical and, logical or
 
 A list comprehension is a constructs of the following form:
+
     [ e | g1, g2, ..., gN ]
 
 pronounced as "a list of all e where g1 and g2 ... and gN", where `e`

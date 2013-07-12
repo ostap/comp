@@ -84,6 +84,183 @@ func ExampleNumbers() {
 	// 2
 }
 
+func ExampleComparisons() {
+	run("-2 < -1")
+	run("-1 < 0")
+	run("0 < 1")
+	run("1 < 2")
+	run("2 < 1")
+	run("1 < 0")
+	run("0 < -1")
+	run("-1 < -2")
+	run("0")
+
+	run("2 > 1")
+	run("1 > 0")
+	run("0 > -1")
+	run("-1 > -2")
+	run("-2 > -1")
+	run("-1 > 0")
+	run("0 > 1")
+	run("1 > 2")
+	run("1")
+
+	run("-2 <= -1")
+	run("-1 <= 0")
+	run("0 <= 1")
+	run("1 <= 2")
+	run("2 <= 1")
+	run("1 <= 0")
+	run("0 <= -1")
+	run("-1 <= -2")
+	run("2")
+
+	run("2 >= 1")
+	run("1 >= 0")
+	run("0 >= -1")
+	run("-1 >= -2")
+	run("-2 >= -1")
+	run("-1 >= 0")
+	run("0 >= 1")
+	run("1 >= 2")
+	run("3")
+
+	run("-2 <= -2")
+	run("-2 >= -2")
+	run("0 <= 0")
+	run("0 >= 0")
+	run("2 <= 2")
+	run("2 >= 2")
+	run("4")
+
+	run("-1.24e10 < -1.23e10 && 0 <= 1.23e3 && 1.23e3 >= 1.23e3")
+	run("-1.24e10 < -1.23e10 && 0 >= 1.23e3 && 1.23e3 >= 1.23e3")
+	run("5")
+
+	// Output:
+	// true
+	// true
+	// true
+	// true
+	// false
+	// false
+	// false
+	// false
+	// 0
+	// true
+	// true
+	// true
+	// true
+	// false
+	// false
+	// false
+	// false
+	// 1
+	// true
+	// true
+	// true
+	// true
+	// false
+	// false
+	// false
+	// false
+	// 2
+	// true
+	// true
+	// true
+	// true
+	// false
+	// false
+	// false
+	// false
+	// 3
+	// true
+	// true
+	// true
+	// true
+	// true
+	// true
+	// 4
+	// true
+	// false
+	// 5
+}
+
+func ExampleEquality() {
+	run("-1 == -1")
+	run("-1 != -1")
+	run("0 == 0")
+	run("0 != 0")
+	run("1 == 1")
+	run("1 != 1")
+
+	run("`` == ``")
+	run("`` != ``")
+	run("`hello world` == `hello world`")
+	run("`hello world` != `hello world`")
+
+	run("-1 != -2")
+	run("-1 == -2")
+	run("`` != `hello world`")
+	run("`` == `hello world`")
+
+	// reflexivity
+	run("2 - 1 == 2 - 1")
+	run("2 - 1 != 2 - 1")
+
+	// symmetry
+	run("1 == 3 - 2")
+	run("1 != 3 - 2")
+	run("3 - 2 == 1")
+	run("3 - 2 != 1")
+
+	// symmetry with type coercions
+	run("1 == `1`")
+	run("1 != `1`")
+	run("`1` == 1")
+	run("`1` != 1")
+
+	// transitivity
+	run("2 - 1 == 3 - 2")
+	run("2 - 1 != 3 - 2")
+	run("3 - 2 == 4 - 3")
+	run("3 - 2 != 4 - 3")
+	run("2 - 1 == 4 - 3")
+	run("2 - 1 != 4 - 3")
+
+	// Output:
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+}
+
 func ExampleStrings() {
 	run(`"hello"`)
 	run("`hello`")

@@ -27,7 +27,6 @@ type Value interface {
 	Object() Object
 
 	Quote(w io.Writer, t Type) error
-	// TODO: check reflexivity, symmetry, transitivity
 	Equals(v Value) Bool
 }
 

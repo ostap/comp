@@ -95,7 +95,6 @@ func (p *Program) Run(s *Stack) Value {
 			l := s.PopBool()
 			r := s.PopBool()
 			s.PushBool(l || r)
-		// TODO: test LT, LTE, GT, GTE
 		case opLT:
 			l := s.PopNum()
 			r := s.PopNum()
@@ -132,7 +131,6 @@ func (p *Program) Run(s *Stack) Value {
 			l := s.PopStr()
 			r := s.PopStr()
 			s.PushStr(l + r)
-		// TODO: test Eq, NEQ
 		case opEq:
 			l := s.Pop()
 			r := s.Pop()

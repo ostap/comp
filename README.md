@@ -36,7 +36,21 @@ and the following operators:
   * `== != =~` - [not] equal, regular expression match
   * `&& ||` - logical and, logical or
 
-A list comprehension is a constructs of the following form:
+for example, the following expressions:
+
+    "2.14" + 1
+    8 / 2
+    3 < 3.14 && 3.14 > 3.13
+    "hello" ++ " world"
+
+will produce:
+
+    3.14
+    4
+    true
+    "hello world"
+
+Iterations are formulated as list comprehensions:
 
     [ e | g1, g2, ..., gN ]
 
@@ -45,7 +59,12 @@ represents an expression and `gX` is either an iteration over a list
 or a boolean expression:
 
     [i*2 | i <- [1, 2, 3], i != 2]
+    [i*j | i <- [1, 2, 3], j <- [10, 20]]
+
+will produce:
+
     [1, 6]
+    [10, 20, 20, 40, 30, 60]
 
 ### build and test
 

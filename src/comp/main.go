@@ -31,7 +31,7 @@ func Start(bind, data string, cores int) error {
 	runtime.ReadMemStats(&m)
 	log.Printf("done (heap ~%vMB)", m.Alloc/1024/1024)
 
-	log.Printf("announcing /full /part /console /pprof")
+	log.Printf("announcing /full /console /pprof")
 
 	http.Handle("/full", FullQuery(store))
 	http.Handle("/console", Console(0))

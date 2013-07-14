@@ -24,63 +24,6 @@ type Console int
 type Profiler int
 type FullQuery Store
 
-const QueryPage = `<!doctype html>
-<html>
-  <head>
-    <title>Comp Console</title>
-    <script type="text/javascript">
-    function $(id) { return document.getElementById(id); }
-    function info(msg) { $("info").innerHTML = msg; }
-    function run() {
-      info("processing ...");
-      var req = new XMLHttpRequest();
-      req.open("POST", "/full", false);
-      req.send(JSON.stringify({ expr: $("expr").value, limit: -1 }));
-
-      info("parsing ...");
-      var resp = JSON.parse(req.responseText);
-      if (resp.error) {
-        info(req.responseText);
-      } else {
-        info(resp.time);
-        var html = "<h1>Result</h1>";
-        if (Array.isArray(resp.result)) {
-          html += "<table style='width:100%'>";
-          for (var i = 0; i < resp.result.length; i++) {
-            var elem = resp.result[i];
-
-            html += "<tr>";
-            if (typeof elem == "object") {
-              for (var k in elem) {
-                html += "<td>" + elem[k] + "</td>";
-              }
-            } else {
-              html += "<td>" + elem + "</td>";
-            }
-            html += "</tr>";
-          }
-          html += "</table>";
-        } else {
-          html += JSON.stringify(resp.result);
-        }
-
-        $("result").innerHTML = html;
-      }
-      return false;
-    }
-    </script>
-  </head>
-  <body>
-    <h1>Expression</h1>
-    <form name="expression" method="POST" onsubmit="return run();">
-      <input id="expr" type="text" spellcheck="false" size="120" autofocus></input>
-      <input type="submit" value="Run"></input>
-    </form>
-    <div id="info"></div>
-    <div id="result"></div>
-  </body>
-</html>`
-
 func webFail(w http.ResponseWriter, msg string, args ...interface{}) {
 	msg = fmt.Sprintf(msg, args...)
 	http.Error(w, msg, http.StatusInternalServerError)
@@ -94,7 +37,7 @@ func badReq(w http.ResponseWriter, json string, args ...interface{}) {
 }
 
 func (c Console) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	io.WriteString(w, QueryPage)
+	io.WriteString(w, ConsolePage)
 }
 
 func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -104,8 +47,7 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		dec := json.NewDecoder(r.Body)
 
 		var req struct {
-			Expr  string `json:"expr"`
-			Limit int    `json:"limit"`
+			Expr string `json:"expr"`
 		}
 		if err := dec.Decode(&req); err != nil {
 			badReq(w, `{"error": %v}`, strconv.Quote("invalid request object: "+err.Error()))
@@ -209,3 +151,91 @@ func (p Profiler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		webFail(w, "unknown profile: %v", r.URL.Path)
 	}
 }
+
+const ConsolePage = `<!DOCTYPE html>
+<html>
+  <head>
+    <title>comp console</title>
+    <style>
+    html, body {
+        background-color: #333;
+        color: white;
+        font-family: monospace;
+        margin: 0;
+        padding: 0;
+    }
+    #console {
+        background-color: black;
+        margin: 0 auto;
+    }
+    .jqconsole {
+        padding: 10px;
+    }
+    .jqconsole-cursor {
+        background-color: gray;
+    }
+    /* when the console looses focus */
+    .jqconsole-blurred .jqconsole-cursor {
+        background-color: #666;
+    }
+    .jqconsole-prompt {
+        color: #0d0;
+    }
+    /* command history */
+    .jqconsole-old-prompt {
+        color: #0b0;
+        font-weight: normal;
+    }
+    /* text color when in input mode */
+    .jqconsole-input {
+        color: #dd0;
+    }
+    /* previously entered input */
+    .jqconsole-old-input {
+        color: #bb0;
+        font-weight: normal;
+    }
+    .jqconsole-output {
+        color: white;
+    }
+    .jqconsole-info {
+        color: green;
+    }
+    </style>
+  </head>
+  <body>
+    <div id="console"></div>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"
+            type="text/javascript" charset="utf-8"></script>
+    <script src="//code.jquery.com/jquery-migrate-1.2.1.min.js"
+            type="text/javascript" charset="utf-8"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jq-console/2.7.7/jqconsole.min.js"
+            type="text/javascript" charset="utf-8"></script>
+    <script>
+    $(function () {
+        var jqconsole = $('#console').jqconsole('', '> ');
+        var startPrompt = function () {
+            jqconsole.Prompt(true, function (input) {
+                if (input.trim() != '') {
+                    $.ajax({
+                        type:        'POST',
+                        url:         '/full',
+                        data:        JSON.stringify({ expr: input }),
+                        processData: false,
+                        contentType: 'application/json; charset=UTF-8',
+                    }).done(function(data) {
+                        jqconsole.Write(JSON.stringify(data.result, null, '  ') + '\n\n', 'jqconsole-output');
+                        jqconsole.Write(data.time + '\n', 'jqconsole-info');
+                    }).fail(function(xhr, type, err) {
+                        jqconsole.Write(type + ': ' + err + ': ' + xhr.responseText + '\n');
+                    });
+                }
+
+                startPrompt();
+            });
+        };
+        startPrompt();
+    });
+    </script>
+  </body>
+</html>`

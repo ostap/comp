@@ -45,22 +45,42 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "POST" {
 		dec := json.NewDecoder(r.Body)
+		start := time.Now()
 
-		var req struct {
-			Expr string `json:"expr"`
-		}
+		req := make(map[string]interface{})
 		if err := dec.Decode(&req); err != nil {
 			badReq(w, `{"error": %v}`, strconv.Quote("invalid request object: "+err.Error()))
 			return
 		}
-
-		start := time.Now()
+		if req["expr"] == nil {
+			badReq(w, `{"error": "missing expr"}`)
+			return
+		}
+		expr, isString := req["expr"].(string)
+		if !isString {
+			badReq(w, `{"error": "expr is not of type string"}`)
+			return
+		}
 
 		decls := Store(fq).Decls()
-		prg, rt, err := Compile(req.Expr, decls)
+		for name, value := range req {
+			if name == "expr" {
+				continue
+			}
+
+			t, v, err := traverse(nil, value)
+			if err != nil {
+				badReq(w, `{"error": %v}`, strconv.Quote(err.Error()))
+				return
+			}
+
+			decls.Declare(name, v, t)
+		}
+
+		prg, rt, err := Compile(expr, decls)
 		if err != nil {
 			info, _ := json.Marshal(err)
-			log.Printf("compilation error '%v'", req.Expr)
+			log.Printf("compilation error '%v'", expr)
 			badReq(w, string(info))
 			return
 		}
@@ -77,7 +97,7 @@ func (fq FullQuery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		dur := time.Now().Sub(start)
 		fmt.Fprintf(w, `, "time": "%v"}`, dur)
-		log.Printf("%v for '%v'", dur, req.Expr)
+		log.Printf("%v for '%v'", dur, expr)
 	} else {
 		badReq(w, `{"error": "%v unsupported method %v"}`, r.URL, r.Method)
 	}

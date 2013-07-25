@@ -374,8 +374,52 @@ func ExampleErrors() {
 	// cannot resolve type of '{id, obj}.obj.value.unknown'
 }
 
-func run(query string) {
-	req := fmt.Sprintf(`{"expr": %v}`, strconv.Quote(query))
+func ExampleArguments() {
+	args := make(map[string]interface{})
+	args["num"] = 1
+	args["str"] = "hello"
+	args["list"] = []int{1, 2, 3}
+	args["obj"] = map[string]interface{}{"id": 153, "name": "hello"}
+
+	runWithArgs("1 + num", args)
+	runWithArgs("str ++ ` world`", args)
+	runWithArgs("[i | i <- list, i != 2]", args)
+	runWithArgs("obj.id", args)
+
+	delete(args, "expr")
+	runWithArgs("", args)
+	args["expr"] = 357
+	runWithArgs("", args)
+
+	// Output:
+	// 2
+	// "hello world"
+	// [1,3]
+	// 153
+	// missing expr
+	// expr is not of type string
+}
+
+func run(expr string) {
+	req := fmt.Sprintf(`{"expr": %v}`, strconv.Quote(expr))
+	_run(req)
+}
+
+func runWithArgs(expr string, args map[string]interface{}) {
+	if expr != "" {
+		args["expr"] = expr
+	}
+
+	req, err := json.Marshal(args)
+	if err != nil {
+		log.Fatalf("failed to marshal json: %v", err)
+		return
+	}
+
+	_run(string(req))
+}
+
+func _run(req string) {
 	resp, err := http.Post(Addr, "application/json", strings.NewReader(req))
 	if err != nil {
 		log.Fatalf("post failed: %v", err)

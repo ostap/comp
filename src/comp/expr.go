@@ -81,6 +81,12 @@ func (e Expr) Field(name string, pos *int) Expr {
 	}}
 }
 
+func (e Expr) Index(name string, pos *int) Expr {
+	return Expr{nextEID(), fmt.Sprintf("%v[%v]", e.Name, name), func() []Op {
+		return append(e.Code(), OpIndex(*pos))
+	}}
+}
+
 func (l Expr) Binary(r Expr, op Op, name string) Expr {
 	return Expr{nextEID(), fmt.Sprintf("%v %v %v", l.Name, name, r.Name), func() []Op {
 		lc := l.Code()

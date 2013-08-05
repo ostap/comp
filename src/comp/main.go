@@ -1,28 +1,23 @@
-// Copyright (c) 2013 Ostap Cherkashin. You can use this source code
+// Copyright (c) 2013 Ostap Cherkashin, Julius Chrobak. You can use this source code
 // under the terms of the MIT License found in the LICENSE file.
 
 package main
 
 import (
+	"bufio"
 	"flag"
 	"log"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 )
 
-func Start(bind, data string, cores int) error {
+func Start(bind string, cores int, load func() *Store) error {
 	log.Printf("running on %d core(s)", runtime.NumCPU())
 	log.Printf("adjusting runtime to run on %d cores (old value %d)", cores, runtime.GOMAXPROCS(cores))
 
-	store := NewStore()
-	if data != "" {
-		for _, fileName := range strings.Split(data, ",") {
-			if err := store.Add(fileName); err != nil {
-				log.Printf("%v", err)
-			}
-		}
-	}
+	store := load()
 
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -33,7 +28,7 @@ func Start(bind, data string, cores int) error {
 
 	log.Printf("announcing /full /console /pprof")
 
-	http.Handle("/full", FullQuery(store))
+	http.Handle("/full", FullQuery(*store))
 	http.Handle("/console", Console(0))
 	http.Handle("/pprof/", http.StripPrefix("/pprof/", Profiler(0)))
 
@@ -46,7 +41,28 @@ func main() {
 	cores := flag.Int("cores", runtime.NumCPU(), "how many cores to use for computation")
 	flag.Parse()
 
-	log.Fatal(Start(*bind, *data, *cores))
+	load := func() *Store {
+		store := NewStore()
+		if *data != "" {
+			for _, fileName := range strings.Split(*data, ",") {
+				file, err := os.Open(fileName)
+				if err != nil {
+					log.Printf("%v", err)
+					continue
+				}
+				r := bufio.NewReader(file)
+
+				if err := store.Add(fileName, r); err != nil {
+					log.Printf("%v", err)
+				}
+
+				file.Close()
+			}
+		}
+		return &store
+	}
+
+	log.Fatal(Start(*bind, *cores, load))
 }
 
 func init() {

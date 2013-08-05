@@ -40,7 +40,7 @@ func (d *Decls) Strict(on bool) {
 
 func (d *Decls) Declare(name string, v Value, t Type) (int, error) {
 	if name == "" {
-		name = fmt.Sprintf("+%d", len(d.idents))
+		name = fmt.Sprintf("__tmp_var_%d", len(d.idents))
 	}
 
 	if d.find(name) > -1 && d.names[name] != nil {
@@ -147,18 +147,18 @@ func (d *Decls) Verify(resEID int64) (Type, []string) {
 	}
 
 	// resolve named types
-	for n, t := range d.names {
-		_, ok := d.resolve(t)
-		if !ok {
-			d.err("cannot resolve type of '%v'", n)
+	for _, t := range d.names {
+		_, err := d.resolve(t)
+		if err != nil {
+			d.err("%v", err)
 		}
 	}
 
 	// resolve expression types
 	for eid, t := range d.exprs {
-		rt, ok := d.resolve(t)
-		if !ok {
-			d.err("cannot resolve type of '%v'", d.code[eid])
+		rt, err := d.resolve(t)
+		if err != nil {
+			d.err("%v", err)
 		} else if eid == resEID {
 			resType = rt
 		}
@@ -167,17 +167,12 @@ func (d *Decls) Verify(resEID int64) (Type, []string) {
 	// calculate field positions
 	for _, f := range d.fields {
 		if *f.pos < 0 {
-			t, ok := d.resolve(d.exprs[f.eid])
-			if ok {
-				ot, isObject := t.(ObjectType)
-				if !isObject {
-					d.err("expression '%v' is not an object", d.code[f.eid])
-				} else {
-					*f.pos = ot.Pos(f.name)
-					if *f.pos < 0 {
-						d.err("object '%v' has no field '%v'", d.code[f.eid], f.name)
-					}
-				}
+			t, err := d.resolve(d.exprs[f.eid])
+			if err != nil {
+				d.err("%v", err)
+			} else {
+				ot, _ := t.(ObjectType)
+				*f.pos = ot.Pos(f.name)
 			}
 		}
 	}
@@ -214,70 +209,83 @@ func (d *Decls) insert(name string) int {
 	return addr
 }
 
-func (d *Decls) resolve(t Type) (Type, bool) {
+func (d *Decls) resolve(t Type) (Type, error) {
 	switch st := t.(type) {
 	case TypeOfExpr:
 		return d.resolve(d.exprs[int64(st)])
 	case TypeOfField:
-		ot, ok := d.resolve(d.exprs[st.eid])
-		if ok {
-			ot, isObject := ot.(ObjectType)
-			if isObject && ot.Has(st.name) {
-				return ot.Type(st.name), true
-			}
+		ot, err := d.resolve(d.exprs[st.eid])
+		if err != nil {
+			return nil, err
 		}
 
-		return nil, false
+		o, isObject := ot.(ObjectType)
+		if !isObject {
+			return nil, fmt.Errorf("'%v' is not an object", d.code[st.eid])
+		}
+
+		if !o.Has(st.name) {
+			return nil, fmt.Errorf("object '%v' does not have field '%v'", d.code[st.eid], st.name)
+		}
+
+		return o.Type(st.name), nil
 	case TypeOfElem:
-		lt, ok := d.resolve(d.exprs[int64(st)])
-		if ok {
-			lt, isList := lt.(ListType)
-			if isList {
-				return lt.Elem, true
-			}
+		eid := int64(st)
+		lt, err := d.resolve(d.exprs[eid])
+		if err != nil {
+			return nil, err
 		}
 
-		return nil, false
+		l, isList := lt.(ListType)
+		if !isList {
+			return nil, fmt.Errorf("'%v' is not a list", d.code[eid])
+		}
+
+		return l.Elem, nil
 	case TypeOfIdent:
 		return d.resolve(d.names[string(st)])
 	case TypeOfFunc:
 		return d.resolve(d.names[string(st)])
 	case ScalarType:
-		return ScalarType(st), true
+		return ScalarType(st), nil
 	case ListType:
-		t, ok := d.resolve(st.Elem)
-		return ListType{t}, ok
-	case FuncType:
-		ret, ok := d.resolve(st.Return)
-		if ok {
-			args := make([]Type, len(st.Args))
-			for i, t := range st.Args {
-				rt, ok := d.resolve(t)
-				if !ok {
-					return nil, false
-				}
-
-				args[i] = rt
-			}
-
-			return FuncType{ret, args}, ok
+		t, err := d.resolve(st.Elem)
+		if err != nil {
+			return nil, err
 		}
 
-		return nil, false
+		return ListType{t}, nil
+	case FuncType:
+		ret, err := d.resolve(st.Return)
+		if err != nil {
+			return nil, err
+		}
+
+		args := make([]Type, len(st.Args))
+		for i, t := range st.Args {
+			rt, err := d.resolve(t)
+			if err != nil {
+				return nil, err
+			}
+
+			args[i] = rt
+		}
+
+		return FuncType{ret, args}, nil
 	case ObjectType:
 		ot := make(ObjectType, len(st))
 		for i, f := range st {
-			t, ok := d.resolve(f.Type)
-			if !ok {
-				return nil, false
+			t, err := d.resolve(f.Type)
+			if err != nil {
+				return nil, err
 			}
 
 			ot[i].Name = f.Name
 			ot[i].Type = t
 		}
 
-		return ot, true
+		return ot, nil
 	}
 
-	return nil, false
+	return nil, fmt.Errorf("unknown type %v", t)
 }

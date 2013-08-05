@@ -364,16 +364,20 @@ func ExampleErrors() {
 	run("b + a")
 	run("[i | j <- [1, 2, 3]]")
 	run("[i * j | i <- [0, 1, 2, 3], trunc(j), j <- [10, 20]]")
+	run(`{id: 1, obj: {parent: 1, value: "hello"}}.obj.unknown`)
 	run(`{id: 1, obj: {parent: 1, value: "hello"}}.obj.value.unknown`)
 	run(`[i | i <- [1, 2, 3], i <- [1, 2, 3]]`)
+	run(`[i | i <- 3 + 5]`)
 
 	// Output:
 	// unknown identifier 'a'
 	// unknown identifier 'b'
 	// unknown identifier 'i'
 	// unknown identifier 'j'
-	// cannot resolve type of '{id, obj}.obj.value.unknown'
+	// object '{id, obj}.obj' does not have field 'unknown'
+	// '{id, obj}.obj.value' is not an object
 	// 'i' is already declared
+	// '3 + 5' is not a list
 }
 
 func ExampleArguments() {

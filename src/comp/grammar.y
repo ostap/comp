@@ -77,25 +77,25 @@ program:
 primary_expression:
       STRING
 	{
-		addr := gDecls.Declare("", String($1), ScalarType(0))
+		addr, _ := gDecls.Declare("", String($1), ScalarType(0))
 		$$ = ExprLoad(strconv.Quote($1), addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | NUMBER
 	{
-		addr := gDecls.Declare("", Number($1), ScalarType(0))
+		addr, _ := gDecls.Declare("", Number($1), ScalarType(0))
 		$$ = ExprLoad(fmt.Sprintf("%v", $1), addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | TRUE
 	{
-		addr := gDecls.Declare("", Bool(true), ScalarType(0))
+		addr, _ := gDecls.Declare("", Bool(true), ScalarType(0))
 		$$ = ExprLoad("true", addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     | FALSE
 	{
-		addr := gDecls.Declare("", Bool(false), ScalarType(0))
+		addr, _ := gDecls.Declare("", Bool(false), ScalarType(0))
 		$$ = ExprLoad("false", addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
@@ -129,7 +129,7 @@ primary_expression:
 	{
 		gDecls.Strict(false)
 		resType := ListType{TypeOfExpr($2.Id)}
-		resAddr := gDecls.Declare("", nil, resType)
+		resAddr, _ := gDecls.Declare("", nil, resType)
 		loop := $4.Return($2, resAddr)
 		$$ = ExprComp(loop, resAddr)
 		gDecls.SetType($$, resType)
@@ -144,7 +144,10 @@ generator_list:
       IDENT generator expression
 	{
 		gDecls.Strict(true)
-		varAddr := gDecls.Declare($1, nil, TypeOfElem($3.Id))
+		varAddr, err := gDecls.Declare($1, nil, TypeOfElem($3.Id))
+		if err != nil {
+			parseError("%v", err)
+		}
 		$$ = ForEach(gLID, varAddr, $3, $2)
 		gLID++
 	}
@@ -154,7 +157,10 @@ generator_list:
 	}
     | generator_list ',' IDENT generator expression
 	{
-		varAddr := gDecls.Declare($3, nil, TypeOfElem($5.Id))
+		varAddr, err := gDecls.Declare($3, nil, TypeOfElem($5.Id))
+		if err != nil {
+			parseError("%v", err)
+		}
 		$$ = $1.Nest(gLID, varAddr, $5, $4)
 		gLID++
 	}

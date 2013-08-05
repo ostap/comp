@@ -38,18 +38,21 @@ func (d *Decls) Strict(on bool) {
 	d.strict = on
 }
 
-// TODO: check redeclarations
-func (d *Decls) Declare(name string, v Value, t Type) int {
+func (d *Decls) Declare(name string, v Value, t Type) (int, error) {
 	if name == "" {
 		name = fmt.Sprintf("+%d", len(d.idents))
 	}
 
-	addr := d.find(name)
+	if d.find(name) > -1 && d.names[name] != nil {
+		return -1, fmt.Errorf("'%v' is already declared", name)
+	}
+
+	addr := d.insert(name)
 
 	d.names[name] = t
 	d.values[addr] = v
 
-	return addr
+	return addr, nil
 }
 
 func (d *Decls) AddFunc(fn *Func) {
@@ -74,7 +77,7 @@ func (d *Decls) UseIdent(name string) int {
 		d.err("unknown identifier '%v'", name)
 	}
 
-	return d.find(name)
+	return d.insert(name)
 }
 
 func (d *Decls) UseFunc(name string, eids []int64) int {
@@ -197,6 +200,11 @@ func (d *Decls) find(name string) int {
 		}
 	}
 
+	return addr
+}
+
+func (d *Decls) insert(name string) int {
+	addr := d.find(name)
 	if addr < 0 {
 		addr = len(d.idents)
 		d.idents = append(d.idents, name)

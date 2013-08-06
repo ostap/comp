@@ -1,4 +1,4 @@
-// Copyright (c) 2013 Ostap Cherkashin. You can use this source code
+// Copyright (c) 2013 Ostap Cherkashin, Julius Chrobak. You can use this source code
 // under the terms of the MIT License found in the LICENSE file.
 
 package main
@@ -35,6 +35,7 @@ const (
 	opObject // allocate a new object on the stack with that many fields
 	opSet    // set a field of an object to a value from the stack
 	opGet    // get a field of an object and push it on the stack
+	opIndex  // get an element of a list and push it on the stack
 	opLoop   // prepare for iteration over a list from the stack
 	opNext   // push the next element from the list on the stack and jump to op.Arg
 	opTest   // jump to op.Arg if the top of the stack is false
@@ -154,6 +155,13 @@ func (p *Program) Run(s *Stack) Value {
 			obj := s.PopObj()
 			val := obj[op.Arg]
 			s.Push(val)
+		case opIndex:
+			list := s.PopList()
+			if op.Arg > -1 && op.Arg < len(list) {
+				s.Push(list[op.Arg])
+			} else {
+				s.Push(String(""))
+			}
 		case opArg:
 			s.Push(Number(op.Arg))
 		case opLoop:
@@ -324,6 +332,8 @@ func (op Op) String() string {
 		return fmt.Sprintf("set %d", op.Arg)
 	case opGet:
 		return fmt.Sprintf("get %d", op.Arg)
+	case opIndex:
+		return fmt.Sprintf("get %d", op.Arg)
 	case opLoop:
 		return fmt.Sprintf("loop %d", op.Arg)
 	case opNext:
@@ -431,6 +441,10 @@ func OpSet(field int) Op {
 
 func OpGet(field int) Op {
 	return Op{opGet, field}
+}
+
+func OpIndex(field int) Op {
+	return Op{opIndex, field}
 }
 
 func OpLoop(lid int) Op {

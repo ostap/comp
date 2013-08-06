@@ -291,11 +291,19 @@ func ExampleLists() {
 	run("[true, false]")
 	run("[1,2,3]")
 	run(`["a","b","c"]`)
+	run(`["a","b","c"][0]`)
+	run(`["a","b","c"][3]`)
+	run(`["a","b","c"][1.999]`)
+	run(`[{id:0},{id:1},{id:2}][1]`)
 
 	// Output:
 	// [true,false]
 	// [1,2,3]
 	// ["a","b","c"]
+	// "a"
+	// ""
+	// "b"
+	// {"id":1}
 }
 
 func ExampleObjects() {

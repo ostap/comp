@@ -244,7 +244,7 @@ func (o Object) Quote(w io.Writer, t Type) error {
 			}
 		}
 
-		_, err = fmt.Fprintf(w, `"%v": `, ot[i].Name)
+		_, err = fmt.Fprintf(w, `%v: `, strconv.Quote(ot[i].Name))
 		if err != nil {
 			return err
 		}

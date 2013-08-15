@@ -66,10 +66,7 @@ func (s Store) Add(fileName string, r *bufio.Reader) error {
 	} else if path.Ext(fileName) == ".xml" {
 		t, v, err = readXML(r)
 	} else {
-		t, err = readHead(r)
-		if err == nil {
-			v, err = readBody(t.(ListType), fileName, r)
-		}
+		t, v, err = readTSV(r, fileName)
 	}
 
 	if err != nil {
@@ -302,10 +299,10 @@ func readJSON(r *bufio.Reader) (Type, Value, error) {
 	return traverse(nil, data)
 }
 
-func readHead(r *bufio.Reader) (ListType, error) {
+func readTSV(r *bufio.Reader, fileName string) (Type, Value, error) {
 	str, err := r.ReadString('\n')
 	if err != nil {
-		return ListType{}, err
+		return nil, nil, err
 	}
 
 	fields := strings.Split(str, "\t")
@@ -315,10 +312,11 @@ func readHead(r *bufio.Reader) (ListType, error) {
 		res[i].Type = ScalarType(0)
 	}
 
-	return ListType{Elem: res}, nil
+	t := ListType{Elem: res}
+	return t, readBody(t, fileName, r), nil
 }
 
-func readBody(t ListType, fileName string, r *bufio.Reader) (List, error) {
+func readBody(t ListType, fileName string, r *bufio.Reader) List {
 	lines := make(chan line, 1024)
 	go func() {
 		for lineNo := 0; ; lineNo++ {
@@ -366,7 +364,7 @@ func readBody(t ListType, fileName string, r *bufio.Reader) (List, error) {
 	}
 	ticker.Stop()
 
-	return list, nil
+	return list
 }
 
 func tabDelimParser(id int, ot ObjectType, in chan line, out Body, ctl chan int) {

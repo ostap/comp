@@ -4,7 +4,6 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"log"
 	"net/http"
@@ -50,9 +49,8 @@ func main() {
 					log.Printf("%v", err)
 					continue
 				}
-				r := bufio.NewReader(file)
 
-				if err := store.Add(fileName, r); err != nil {
+				if err := store.Add(fileName, file); err != nil {
 					log.Printf("%v", err)
 				}
 

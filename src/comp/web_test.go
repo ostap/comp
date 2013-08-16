@@ -4,7 +4,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -509,7 +508,7 @@ func init() {
                 </items>
             `)
 
-			r := bufio.NewReader(bytes.NewReader(xmlData))
+			r := bytes.NewReader(xmlData)
 			store.Add("xmlData.xml", r)
 			return &store
 		}

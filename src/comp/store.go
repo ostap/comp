@@ -47,7 +47,7 @@ func (s Store) IsDef(name string) bool {
 	return s.types[name] != nil
 }
 
-func (s Store) Add(fileName string, r *bufio.Reader) error {
+func (s Store) Add(fileName string, r io.Reader) error {
 	name := path.Base(fileName)
 	if dot := strings.Index(name, "."); dot > 0 {
 		name = name[:dot]
@@ -129,11 +129,11 @@ func alloc() map[string]interface{} {
 	return res
 }
 
-func readXML(r *bufio.Reader) (Type, Value, error) {
+func readXML(r io.Reader) (Type, Value, error) {
 	dec := xml.NewDecoder(r)
 
 	value := alloc() /* root element */
-	stack := append(make([]*map[string]interface{}, 0), &value)
+	stack := append(make([]map[string]interface{}, 0), value)
 	names := append(make([]string, 0), "")
 	top := 1
 
@@ -157,22 +157,22 @@ func readXML(r *bufio.Reader) (Type, Value, error) {
 			}
 
 			parent := stack[top-1]
-			if prev, ok := (*parent)[n]; ok {
+			if prev, ok := parent[n]; ok {
 				switch e := prev.(type) {
 				case []interface{}:
-					(*parent)[n] = append(e, val)
+					parent[n] = append(e, val)
 				default:
-					(*parent)[n] = append(append(make([]interface{}, 0), e), val)
+					parent[n] = append(append(make([]interface{}, 0), e), val)
 				}
 			} else {
-				(*parent)[n] = val
+				parent[n] = val
 			}
 
 			if top >= len(stack) {
-				stack = append(stack, &val)
+				stack = append(stack, val)
 				names = append(names, n)
 			} else {
-				stack[top] = &val
+				stack[top] = val
 				names[top] = n
 			}
 			top++
@@ -185,7 +185,7 @@ func readXML(r *bufio.Reader) (Type, Value, error) {
 			top--
 		case xml.CharData:
 			parent := stack[top-1]
-			(*parent)["text()"] = (*parent)["text()"].(string) + string(t)
+			parent["text()"] = parent["text()"].(string) + string(t)
 		default:
 			/* ignoring the following token types
 			   xml.Comment
@@ -287,7 +287,7 @@ func traverse(h Type, v interface{}) (Type, Value, error) {
 	}
 }
 
-func readJSON(r *bufio.Reader) (Type, Value, error) {
+func readJSON(r io.Reader) (Type, Value, error) {
 	dec := json.NewDecoder(r)
 
 	var data interface{}
@@ -299,8 +299,9 @@ func readJSON(r *bufio.Reader) (Type, Value, error) {
 	return traverse(nil, data)
 }
 
-func readTSV(r *bufio.Reader, fileName string) (Type, Value, error) {
-	str, err := r.ReadString('\n')
+func readTSV(r io.Reader, fileName string) (Type, Value, error) {
+	br := bufio.NewReader(r)
+	str, err := br.ReadString('\n')
 	if err != nil {
 		return nil, nil, err
 	}
@@ -313,7 +314,7 @@ func readTSV(r *bufio.Reader, fileName string) (Type, Value, error) {
 	}
 
 	t := ListType{Elem: res}
-	return t, readBody(t, fileName, r), nil
+	return t, readBody(t, fileName, br), nil
 }
 
 func readBody(t ListType, fileName string, r *bufio.Reader) List {

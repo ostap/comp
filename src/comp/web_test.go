@@ -359,12 +359,14 @@ func ExampleFuncs() {
 	run("upper(`hello`)")
 	run("trim(`  hello  `)")
 	run("trunc(1.234)")
+	run(`replace(" 123 456", " ", "")`)
 
 	// Output:
 	// "hello"
 	// "HELLO"
 	// "hello"
 	// 1
+	// "123456"
 }
 
 func ExampleErrors() {

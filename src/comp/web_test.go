@@ -376,6 +376,7 @@ func ExampleErrors() {
 	run(`{id: 1, obj: {parent: 1, value: "hello"}}.obj.value.unknown`)
 	run(`[i | i <- [1, 2, 3], i <- [1, 2, 3]]`)
 	run(`[i | i <- 3 + 5]`)
+	run(`{3, 3}`)
 
 	// Output:
 	// unknown identifier 'a'
@@ -386,6 +387,7 @@ func ExampleErrors() {
 	// '{id, obj}.obj.value' is not an object
 	// 'i' is already declared
 	// '3 + 5' is not a list
+	// duplicate attribute '3' in object literal
 }
 
 func ExampleArguments() {

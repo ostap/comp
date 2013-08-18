@@ -73,3 +73,14 @@ func FuncFuzzy() *Func {
 		s.PushNum(val)
 	}}
 }
+
+func FuncReplace() *Func {
+	t := FuncType{ScalarType(0), []Type{ScalarType(0), ScalarType(0), ScalarType(0)}}
+	return &Func{"replace", t, func(s *Stack) {
+		str := s.PopStr()
+		from := s.PopStr()
+		to := s.PopStr()
+		str = strings.Replace(str, from, to, -1)
+		s.PushStr(str)
+	}}
+}

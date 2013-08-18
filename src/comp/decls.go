@@ -273,8 +273,13 @@ func (d *Decls) resolve(t Type) (Type, error) {
 
 		return FuncType{ret, args}, nil
 	case ObjectType:
+		attrs := make(map[string]bool)
 		ot := make(ObjectType, len(st))
 		for i, f := range st {
+			if attrs[f.Name] {
+				return nil, fmt.Errorf("duplicate attribute '%v' in object literal", f.Name)
+			}
+
 			t, err := d.resolve(f.Type)
 			if err != nil {
 				return nil, err
@@ -282,6 +287,8 @@ func (d *Decls) resolve(t Type) (Type, error) {
 
 			ot[i].Name = f.Name
 			ot[i].Type = t
+
+			attrs[f.Name] = true
 		}
 
 		return ot, nil

@@ -293,6 +293,10 @@ func ExampleLists() {
 	run(`["a","b","c"]`)
 	run(`[{a: "a"}, {"b"}, {"c"}]`)
 	run(`[{"a"}, {"b"}, {"c"}]`)
+	run(`["a","b","c"][0]`)
+	run(`["a","b","c"][3]`)
+	run(`["a","b","c"][1.999]`)
+	run(`[{id:0},{id:1},{id:2}][1]`)
 
 	// Output:
 	// [true,false]
@@ -300,6 +304,10 @@ func ExampleLists() {
 	// ["a","b","c"]
 	// [{"a":"a"},{"a":"b"},{"a":"c"}]
 	// [{"\"a\"":"a"},{"\"a\"":"b"},{"\"a\"":"c"}]
+	// "a"
+	// ""
+	// "b"
+	// {"id":1}
 }
 
 func ExampleObjects() {
@@ -367,12 +375,14 @@ func ExampleFuncs() {
 	run("upper(`hello`)")
 	run("trim(`  hello  `)")
 	run("trunc(1.234)")
+	run(`replace(" 123 456", " ", "")`)
 
 	// Output:
 	// "hello"
 	// "HELLO"
 	// "hello"
 	// 1
+	// "123456"
 }
 
 func ExampleErrors() {
@@ -384,6 +394,7 @@ func ExampleErrors() {
 	run(`{id: 1, obj: {parent: 1, value: "hello"}}.obj.value.unknown`)
 	run(`[i | i <- [1, 2, 3], i <- [1, 2, 3]]`)
 	run(`[i | i <- 3 + 5]`)
+	run(`{3, 3}`)
 
 	// Output:
 	// unknown identifier 'a'
@@ -394,6 +405,7 @@ func ExampleErrors() {
 	// '{id, obj}.obj.value' is not an object
 	// 'i' is already declared
 	// '3 + 5' is not a list
+	// duplicate attribute '3' in object literal
 }
 
 func ExampleArguments() {

@@ -235,6 +235,12 @@ postfix_expression:
 		$$ = $1.Field($3, pos)
 		gDecls.SetType($$, TypeOfField{$1.Id, t})
 	}
+    | postfix_expression '[' NUMBER ']'
+	{
+		pos := int($3)
+		$$ = $1.Index(fmt.Sprintf("%f",$3), &pos)
+		gDecls.SetType($$, TypeOfElem($1.Id))
+	}
     | postfix_expression '(' expression_list_or_empty ')'
 	{
 		eids := make([]int64, len($3))

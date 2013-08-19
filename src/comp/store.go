@@ -107,7 +107,7 @@ func IsIdent(s string) bool {
 	return ident
 }
 
-func parseFloat(s string) interface{} {
+func toScalar(s string) interface{} {
 	num, err := strconv.ParseFloat(s, 64)
 	if err != nil || math.IsNaN(num) || math.IsInf(num, 0) {
 		return s
@@ -154,7 +154,7 @@ func readXML(r io.Reader) (Type, Value, error) {
 			n := name("", t.Name)
 
 			for _, v := range t.Attr {
-				val[name("@", v.Name)] = parseFloat(v.Value)
+				val[name("@", v.Name)] = toScalar(v.Value)
 			}
 
 			parent := stack[top-1]
@@ -163,7 +163,7 @@ func readXML(r io.Reader) (Type, Value, error) {
 				case []interface{}:
 					parent[n] = append(e, val)
 				default:
-					parent[n] = append(append(make([]interface{}, 0), e), val)
+					parent[n] = []interface{}{e, val}
 				}
 			} else {
 				parent[n] = val
@@ -181,7 +181,7 @@ func readXML(r io.Reader) (Type, Value, error) {
 			exp := names[top-1]
 			got := name("", t.Name)
 			if exp != got {
-				return nil, nil, errors.New(fmt.Sprintf("XML syntax error: element <%v> closed by </%v>", exp, got))
+				return nil, nil, fmt.Errorf("XML syntax error: element <%v> closed by </%v>", exp, got)
 			}
 			top--
 		case xml.CharData:

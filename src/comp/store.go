@@ -97,6 +97,7 @@ func (s Store) Decls() *Decls {
 	decls.AddFunc(FuncLower())
 	decls.AddFunc(FuncUpper())
 	decls.AddFunc(FuncFuzzy())
+	decls.AddFunc(FuncReplace())
 
 	return decls
 }

@@ -231,6 +231,12 @@ postfix_expression:
 		$$ = $1.Field($3, pos)
 		gDecls.SetType($$, TypeOfField{$1.Id, $3})
 	}
+    | postfix_expression '[' NUMBER ']'
+	{
+		pos := int($3)
+		$$ = $1.Index(fmt.Sprintf("%f",$3), &pos)
+		gDecls.SetType($$, TypeOfElem($1.Id))
+	}
     | postfix_expression '(' expression_list_or_empty ')'
 	{
 		eids := make([]int64, len($3))
@@ -411,7 +417,13 @@ func (l *lexer) Lex(yylval *comp_SymType) int {
 		return NUMBER
 	case scanner.String, scanner.RawString:
 		yylval.str = l.scan.TokenText()
-		yylval.str = yylval.str[1 : len(yylval.str)-1]
+		str, err := strconv.Unquote(yylval.str)
+		if err != nil {
+			parseError("%v", err)
+		} else {
+			yylval.str = str
+		}
+
 		return STRING
 	case '<':
 		if l.scan.Peek() == '-' {

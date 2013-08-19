@@ -421,7 +421,13 @@ func (l *lexer) Lex(yylval *comp_SymType) int {
 		return NUMBER
 	case scanner.String, scanner.RawString:
 		yylval.str = l.scan.TokenText()
-		yylval.str = yylval.str[1 : len(yylval.str)-1]
+		str, err := strconv.Unquote(yylval.str)
+		if err != nil {
+			parseError("%v", err)
+		} else {
+			yylval.str = str
+		}
+
 		return STRING
 	case '<':
 		if l.scan.Peek() == '-' {

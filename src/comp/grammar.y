@@ -227,13 +227,9 @@ postfix_expression:
 	}
     | postfix_expression '[' STRING ']'
 	{
-		t, e := strconv.Unquote("\"" + $3 + "\"")
-		if e != nil {
-			parseError("%v", e)
-		}
-		pos := gDecls.UseField($1.Id, t)
+		pos := gDecls.UseField($1.Id, $3)
 		$$ = $1.Field($3, pos)
-		gDecls.SetType($$, TypeOfField{$1.Id, t})
+		gDecls.SetType($$, TypeOfField{$1.Id, $3})
 	}
     | postfix_expression '[' NUMBER ']'
 	{

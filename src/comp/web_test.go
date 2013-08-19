@@ -295,6 +295,8 @@ func ExampleLists() {
 	run(`["a","b","c"][3]`)
 	run(`["a","b","c"][1.999]`)
 	run(`[{id:0},{id:1},{id:2}][1]`)
+	run(`[{a: "a"}, {"b"}, {"c"}]`)
+	run(`[{"a"}, {"b"}, {"c"}]`)
 
 	// Output:
 	// [true,false]
@@ -304,9 +306,15 @@ func ExampleLists() {
 	// ""
 	// "b"
 	// {"id":1}
+	// [{"a":"a"},{"a":"b"},{"a":"c"}]
+	// [{"\"a\"":"a"},{"\"a\"":"b"},{"\"a\"":"c"}]
 }
 
 func ExampleObjects() {
+	run(`{"foo"}`)
+	run(`{"foo"}["\"foo\""]`)
+	run(`{1}`)
+	run(`{1}["1"]`)
 	run(`{id: 1, name: "foo"}`)
 	run(`{id: 1, children: [2, 3]}`)
 	run(`{id: 1, name: "foo"}.id`)
@@ -318,6 +326,10 @@ func ExampleObjects() {
 	run(`{id: 1, obj: {parent: 1, value: "hello"}}.obj.value`)
 
 	// Output:
+	// {"\"foo\"":"foo"}
+	// "foo"
+	// {"1":1}
+	// 1
 	// {"id":1,"name":"foo"}
 	// {"children":[2,3],"id":1}
 	// 1
@@ -340,6 +352,8 @@ func ExampleComps() {
 	run("[i * j | i <- [1, 2, 3], j <- [10, 20]]")
 	run("[i * j | i <- [1, 2, 3], j <- [10, 20], i == j / 10]")
 	run("[i * j | i <- [1, 2, 3], trunc(i), j <- [10, 20]]")
+	run(`[ i["a"] | i <- [{a: "a"}, {"b"}, {"c"}]]`)
+	run(`[ i["\"a\""] | i <- [{"a"}, {"b"}, {"c"}]]`)
 
 	// Output:
 	// [1,2,3]
@@ -352,6 +366,8 @@ func ExampleComps() {
 	// [10,20,20,40,30,60]
 	// [10,40]
 	// [10,20,20,40,30,60]
+	// ["a","b","c"]
+	// ["a","b","c"]
 }
 
 func ExampleFuncs() {

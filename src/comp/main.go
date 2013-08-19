@@ -12,11 +12,29 @@ import (
 	"strings"
 )
 
-func Start(bind string, cores int, load func() *Store) error {
+func Start(bind, data string, cores int, init func(Store)) error {
 	log.Printf("running on %d core(s)", runtime.NumCPU())
 	log.Printf("adjusting runtime to run on %d cores (old value %d)", cores, runtime.GOMAXPROCS(cores))
 
-	store := load()
+	store := NewStore()
+	if data != "" {
+		for _, fileName := range strings.Split(data, ",") {
+			file, err := os.Open(fileName)
+			if err != nil {
+				log.Printf("%v", err)
+				continue
+			}
+
+			if err := store.Add(fileName, file); err != nil {
+				log.Printf("%v", err)
+			}
+
+			file.Close()
+		}
+	}
+	if init != nil {
+		init(store)
+	}
 
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -27,7 +45,7 @@ func Start(bind string, cores int, load func() *Store) error {
 
 	log.Printf("announcing /full /console /pprof")
 
-	http.Handle("/full", FullQuery(*store))
+	http.Handle("/full", FullQuery(store))
 	http.Handle("/console", Console(0))
 	http.Handle("/pprof/", http.StripPrefix("/pprof/", Profiler(0)))
 
@@ -40,27 +58,7 @@ func main() {
 	cores := flag.Int("cores", runtime.NumCPU(), "how many cores to use for computation")
 	flag.Parse()
 
-	load := func() *Store {
-		store := NewStore()
-		if *data != "" {
-			for _, fileName := range strings.Split(*data, ",") {
-				file, err := os.Open(fileName)
-				if err != nil {
-					log.Printf("%v", err)
-					continue
-				}
-
-				if err := store.Add(fileName, file); err != nil {
-					log.Printf("%v", err)
-				}
-
-				file.Close()
-			}
-		}
-		return &store
-	}
-
-	log.Fatal(Start(*bind, *cores, load))
+	log.Fatal(Start(*bind, *data, *cores, nil))
 }
 
 func init() {

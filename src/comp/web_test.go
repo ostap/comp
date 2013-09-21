@@ -4,12 +4,12 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -435,6 +435,19 @@ func ExampleArguments() {
 	// expr is not of type string
 }
 
+const xmlData = `
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- comment -->
+<name>xmlData</name>
+<items xmlns:m="https://mingle.io">
+    <m:item id="1">
+        <name>Just character data</name>
+    </m:item>
+    <m:item id="2">
+        <name>Second name</name>
+    </m:item>
+</items>`
+
 func ExampleXML() {
 	run(`xmlData.name`)
 	run(`xmlData.name["text()"]`)
@@ -517,31 +530,13 @@ func _run(req string) {
 	}
 }
 
+func addVars(store Store) {
+	store.Add("xmlData.xml", strings.NewReader(xmlData))
+}
+
 func init() {
 	go func() {
-		load := func() *Store {
-			store := NewStore()
-
-			xmlData := []byte(`
-                <?xml version="1.0" encoding="UTF-8"?>
-                <!-- comment -->
-                <name>xmlData</name>
-                <items xmlns:m="https://mingle.io">
-                    <m:item id="1">
-                        <name>Just character data</name>
-                    </m:item>
-                    <m:item id="2">
-                        <name>Second name</name>
-                    </m:item>
-                </items>
-            `)
-
-			r := bytes.NewReader(xmlData)
-			store.Add("xmlData.xml", r)
-			return &store
-		}
-
-		if err := Start(Port, 4, load); err != nil {
+		if err := Start(Port, "", runtime.NumCPU(), addVars); err != nil {
 			log.Fatalf("failed to start comp: %v", err)
 		}
 	}()

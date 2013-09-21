@@ -1,4 +1,4 @@
-// Copyright (c) 2013 Ostap Cherkashin. You can use this source code
+// Copyright (c) 2013 Ostap Cherkashin, Julius Chrobak. You can use this source code
 // under the terms of the MIT License found in the LICENSE file.
 
 package main
@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -17,6 +18,19 @@ const (
 	Port = ":9090"
 	Addr = "http://localhost" + Port + "/full"
 )
+
+const xmlData = `
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- comment -->
+<name>xmlData</name>
+<items xmlns:m="https://mingle.io">
+    <m:item id="1">
+        <name>Just character data</name>
+    </m:item>
+    <m:item id="2">
+        <name>Second name</name>
+    </m:item>
+</items>`
 
 func ExampleBools() {
 	run("true")
@@ -434,6 +448,23 @@ func ExampleArguments() {
 	// expr is not of type string
 }
 
+func ExampleXML() {
+	run(`xmlData.name`)
+	run(`xmlData.name["text()"]`)
+	run(`xmlData.items["@xmlns:m"]`)
+	run(`[ a.name | a <- xmlData.items["m:item"]]`)
+	run(`[ a.name["text()"] | a <- xmlData.items["m:item"]]`)
+	run(`[ a["@id"] | a <- xmlData.items["m:item"]]`)
+
+	// Output:
+	// {"text()":"xmlData"}
+	// "xmlData"
+	// "https://mingle.io"
+	// [{"text()":"Just character data"},{"text()":"Second name"}]
+	// ["Just character data","Second name"]
+	// [1,2]
+}
+
 func run(expr string) {
 	req := fmt.Sprintf(`{"expr": %v}`, strconv.Quote(expr))
 	_run(req)
@@ -499,9 +530,13 @@ func _run(req string) {
 	}
 }
 
+func addVars(store Store) {
+	store.Add("xmlData.xml", strings.NewReader(xmlData))
+}
+
 func init() {
 	go func() {
-		if err := Start(Port, "", 4); err != nil {
+		if err := Start(Port, "", runtime.NumCPU(), addVars); err != nil {
 			log.Fatalf("failed to start comp: %v", err)
 		}
 	}()

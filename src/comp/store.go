@@ -4,7 +4,7 @@
 package main
 
 import (
-	"bufio"
+	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -33,8 +33,8 @@ type Stats struct {
 }
 
 type line struct {
-	lineNo  int
-	lineStr string
+	lineNo int
+	rec    []string
 }
 
 var StatsFailed = Stats{-1, -1}
@@ -65,8 +65,10 @@ func (s Store) Add(fileName string, r io.Reader) error {
 		t, v, err = readJSON(r)
 	} else if path.Ext(fileName) == ".xml" {
 		t, v, err = readXML(r)
+	} else if path.Ext(fileName) == ".csv" {
+		t, v, err = readCSV(r, fileName, ',')
 	} else {
-		t, v, err = readTSV(r, fileName)
+		t, v, err = readCSV(r, fileName, '\t')
 	}
 
 	if err != nil {
@@ -300,33 +302,40 @@ func readJSON(r io.Reader) (Type, Value, error) {
 	return traverse(nil, data)
 }
 
-func readTSV(r io.Reader, fileName string) (Type, Value, error) {
-	br := bufio.NewReader(r)
-	str, err := br.ReadString('\n')
+func readCSV(in io.Reader, fileName string, delim rune) (Type, Value, error) {
+	r := csv.NewReader(in)
+	r.Comma = delim
+	r.LazyQuotes = true
+	r.TrailingComma = true
+	r.FieldsPerRecord = -1
+
+	rec, err := r.Read()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	fields := strings.Split(str, "\t")
-	res := make(ObjectType, len(fields))
-	for i, f := range fields {
-		res[i].Name = strings.Trim(f, " \r\n")
-		res[i].Type = ScalarType(0)
+	head := make(ObjectType, len(rec))
+	for i, f := range rec {
+		head[i].Name = strings.Trim(f, " \r\n")
+		head[i].Type = ScalarType(0)
 	}
 
-	t := ListType{Elem: res}
-	return t, readBody(t, fileName, br), nil
+	t := ListType{Elem: head}
+	return t, readBody(t, fileName, r), nil
 }
 
-func readBody(t ListType, fileName string, r *bufio.Reader) List {
+func readBody(t ListType, fileName string, r *csv.Reader) List {
 	lines := make(chan line, 1024)
 	go func() {
 		for lineNo := 0; ; lineNo++ {
-			lineStr, _ := r.ReadString('\n')
-			if len(lineStr) == 0 {
+			rec, err := r.Read()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				log.Printf("failed to parse %v, %v", fileName, err)
 				break
 			}
-			lines <- line{lineNo, lineStr}
+			lines <- line{lineNo, rec}
 		}
 		close(lines)
 	}()
@@ -336,7 +345,7 @@ func readBody(t ListType, fileName string, r *bufio.Reader) List {
 
 	ot := t.Elem.(ObjectType)
 	for i := 0; i < runtime.NumCPU(); i++ {
-		go tabDelimParser(i, ot, lines, tuples, ctl)
+		go processLine(i, ot, lines, tuples, ctl)
 	}
 	go func() {
 		for i := 0; i < runtime.NumCPU(); i++ {
@@ -369,10 +378,10 @@ func readBody(t ListType, fileName string, r *bufio.Reader) List {
 	return list
 }
 
-func tabDelimParser(id int, ot ObjectType, in chan line, out Body, ctl chan int) {
+func processLine(id int, ot ObjectType, in chan line, out Body, ctl chan int) {
 	count := 0
 	for l := range in {
-		fields := strings.Split(l.lineStr[:len(l.lineStr)-1], "\t")
+		fields := l.rec
 		if len(fields) > len(ot) {
 			log.Printf("line %d: truncating object (-%d fields)", l.lineNo, len(fields)-len(ot))
 			fields = fields[:len(ot)]

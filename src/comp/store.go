@@ -7,7 +7,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -203,6 +202,8 @@ func readXML(r io.Reader) (Type, Value, error) {
 
 func traverse(h Type, v interface{}) (Type, Value, error) {
 	switch v.(type) {
+	case nil:
+		return ScalarType(0), Bool(false), nil
 	case map[string]interface{}:
 		elems := v.(map[string]interface{})
 		val := make(Object, len(elems))
@@ -212,12 +213,12 @@ func traverse(h Type, v interface{}) (Type, Value, error) {
 		case ObjectType:
 			head = h.(ObjectType)
 			if len(head) != len(elems) { /* very strict */
-				return nil, nil, errors.New("invalid type")
+				return nil, nil, fmt.Errorf("invalid object type, expected %v got %v", head, elems)
 			}
 		case nil:
 			head = make(ObjectType, len(elems))
 		default:
-			return nil, nil, errors.New("invalid type")
+			return nil, nil, fmt.Errorf("expected object, got %v (%v)", h.Name(), v)
 		}
 
 		idx := 0
@@ -233,7 +234,7 @@ func traverse(h Type, v interface{}) (Type, Value, error) {
 			}
 			i := head.Pos(name)
 			if i < 0 {
-				return nil, nil, errors.New("invalid type")
+				return nil, nil, fmt.Errorf("cannot find field %v in %v (%v)", name, head, v)
 			}
 			val[i] = v
 
@@ -252,7 +253,7 @@ func traverse(h Type, v interface{}) (Type, Value, error) {
 		case nil:
 			head = ListType{}
 		default:
-			return nil, nil, errors.New("invalid type")
+			return nil, nil, fmt.Errorf("expected list, got %v (%v)", h.Name(), v)
 		}
 
 		for idx, value := range elems {
@@ -271,21 +272,21 @@ func traverse(h Type, v interface{}) (Type, Value, error) {
 		case nil, ScalarType:
 			return ScalarType(0), Bool(v.(bool)), nil
 		default:
-			return nil, nil, errors.New("invalid type")
+			return nil, nil, fmt.Errorf("expected bool, got %v (%v)", h.Name(), v)
 		}
 	case float64:
 		switch h.(type) {
 		case nil, ScalarType:
 			return ScalarType(0), Number(v.(float64)), nil
 		default:
-			return nil, nil, errors.New("invalid type")
+			return nil, nil, fmt.Errorf("expected number, got %v (%v)", h.Name(), v)
 		}
 	default:
 		switch h.(type) {
 		case nil, ScalarType:
 			return ScalarType(0), String(v.(string)), nil
 		default:
-			return nil, nil, errors.New("invalid type")
+			return nil, nil, fmt.Errorf("expected string, got %v (%v)", h.Name(), v)
 		}
 	}
 }

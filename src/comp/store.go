@@ -60,14 +60,17 @@ func (s Store) Add(fileName string, r io.Reader) error {
 	var v Value
 	var err error
 
-	if path.Ext(fileName) == ".json" {
+	switch path.Ext(fileName) {
+	case ".json":
 		t, v, err = readJSON(r)
-	} else if path.Ext(fileName) == ".xml" {
+	case ".xml":
 		t, v, err = readXML(r)
-	} else if path.Ext(fileName) == ".csv" {
+	case ".csv":
 		t, v, err = readCSV(r, fileName, ',')
-	} else {
+	case ".txt":
 		t, v, err = readCSV(r, fileName, '\t')
+	default:
+		return fmt.Errorf("unknown content type %v (try adding -t <type>)", path.Ext(fileName))
 	}
 
 	if err != nil {

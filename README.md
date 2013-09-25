@@ -1,25 +1,25 @@
-### comp
-
 comp is a tool for querying information from files. Its main goal is
 to provide a unified interface to the variety of data representations found
 in public data sets. To achieve this goal comp introduces a small query
 language with type coercion (e.g. "2" + 2 == 4) and a powerful iteration
 mechanism based on [list comprehensions][0].
 
-    $ comp -bind=:9090
-    $ curl -d '{"expr": "\"2\" + 2"}' http://localhost:9090/full
-    {"result": 4, "time": "139.581us"}%
-    $ curl -d '{"expr": "[i | i <- [1, 2, 3], i != 2]"}' http://localhost:9090/full
-    {"result": [ 1, 3 ], "time": "400.913us"}
-    $ curl -d '{"expr": "[i * j | i <- [1, 2, 3], j <- [10, 20]]"}' http://localhost:9090/full
-    {"result": [ 10, 20, 20, 40, 30, 60 ], "time": "267us"}
+    $ comp '"2" + 2'
+    4
+    $ comp '[i | i <- [1, 2, 3], i != 2]'
+    [ 1, 3 ]
+    $ comp '[i * j | i <- [1, 2, 3], j <- [10, 20]]'
+    [ 10, 20, 20, 40, 30, 60 ]
 
-to load a tab delimited file and query its contents:
+Query the standard input:
 
-    $ comp -data=contacts.txt -bind=:9090
+    $ curl https://api.github.com/repos/torvalds/linux/commits > commits.json
+    $ cat commits.json | comp -t json '[ i.commit.author.name | i <- in ]'
+
+Preload files and run queries from the web console `http://localhost:9090/console` or via HTTP:
+
+    $ comp -l :9090 -f commits.json,authors.csv
     $ curl -d '{"expr": "[ c | c <- contacts, c.zip == 8001]"}' http://localhost:9090/full
-
-you can also run queries through a web console on `http://localhost:9090/console`.
 
 ### syntax overview
 

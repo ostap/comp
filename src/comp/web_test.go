@@ -536,7 +536,7 @@ func addVars(store Store) {
 
 func init() {
 	go func() {
-		if err := Start(Port, "", runtime.NumCPU(), addVars); err != nil {
+		if err := Server(Port, "", runtime.NumCPU(), addVars); err != nil {
 			log.Fatalf("failed to start comp: %v", err)
 		}
 	}()

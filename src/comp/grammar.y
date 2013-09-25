@@ -386,13 +386,21 @@ expression:
 %%
 
 type ParseError struct {
-	Line   int    `json:"line"`
-	Column int    `json:"column"`
-	Error  string `json:"error"`
+	Line    int    `json:"line"`
+	Column  int    `json:"column"`
+	Message string `json:"error"`
+}
+
+func (e *ParseError) Error() string {
+	if e != nil {
+		return e.Message
+	}
+
+	return "<nil>"
 }
 
 func NewError(line, column int, msg string, args ...interface{}) *ParseError {
-	return &ParseError{Line: line, Column: column, Error: fmt.Sprintf(msg, args...)}
+	return &ParseError{Line: line, Column: column, Message: fmt.Sprintf(msg, args...)}
 }
 
 type lexer struct {

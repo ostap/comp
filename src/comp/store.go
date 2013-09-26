@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"os"
 	"path"
 	"regexp"
 	"runtime"
@@ -38,8 +39,33 @@ type line struct {
 
 var StatsFailed = Stats{-1, -1}
 
-func NewStore() Store {
-	return Store{make(map[string]Type), make(map[string]Value)}
+func BuildStore(files string) (Store, error) {
+	var err error
+	store := Store{make(map[string]Type), make(map[string]Value)}
+	if files != "" {
+		for _, fileName := range strings.Split(files, ",") {
+			var file *os.File
+			if fileName[0] == '@' {
+				fileName = fmt.Sprintf("in.%v", fileName[1:])
+				file = os.Stdin
+			} else {
+				f, e := os.Open(fileName)
+				if e != nil {
+					err = e
+					continue
+				}
+				defer f.Close()
+				file = f
+			}
+
+			if e := store.Add(fileName, file); e != nil {
+				err = e
+				continue
+			}
+		}
+	}
+
+	return store, err
 }
 
 func (s Store) IsDef(name string) bool {
@@ -70,7 +96,7 @@ func (s Store) Add(fileName string, r io.Reader) error {
 	case ".txt":
 		t, v, err = readCSV(r, fileName, '\t')
 	default:
-		return fmt.Errorf("unknown content type %v (try adding -t <type>)", path.Ext(fileName))
+		err = fmt.Errorf("unknown content type %v (use one of json, xml, csv, txt)", path.Ext(fileName))
 	}
 
 	if err != nil {

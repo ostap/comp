@@ -10,20 +10,18 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"strings"
 )
 
-func Command(expr, ctype string) error {
+func Command(expr, files string) error {
 	log.SetOutput(os.Stderr)
 
-	store := NewStore()
-	if ctype != "" {
-		if err := store.Add(fmt.Sprintf("in.%v", ctype), os.Stdin); err != nil {
-			return err
-		}
+	store, e := BuildStore(files)
+	if e != nil {
+		return e
 	}
 
 	decls := store.Decls()
+
 	prg, rt, err := Compile(expr, decls)
 	if err != nil {
 		return err
@@ -37,26 +35,11 @@ func Command(expr, ctype string) error {
 	return nil
 }
 
-func Server(bind, data string, cores int, init func(Store)) error {
+func Server(bind, files string, cores int, init func(Store)) error {
 	log.Printf("running on %d core(s)", runtime.NumCPU())
 	log.Printf("adjusting runtime to run on %d cores (old value %d)", cores, runtime.GOMAXPROCS(cores))
 
-	store := NewStore()
-	if data != "" {
-		for _, fileName := range strings.Split(data, ",") {
-			file, err := os.Open(fileName)
-			if err != nil {
-				log.Printf("%v", err)
-				continue
-			}
-
-			if err := store.Add(fileName, file); err != nil {
-				log.Printf("%v", err)
-			}
-
-			file.Close()
-		}
-	}
+	store, _ := BuildStore(files)
 	if init != nil {
 		init(store)
 	}
@@ -80,20 +63,20 @@ func Server(bind, data string, cores int, init func(Store)) error {
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage:\n")
-		fmt.Fprintf(os.Stderr, "  read data from the standard input and execute the expression\n")
-		fmt.Fprintf(os.Stderr, "    comp -t <type> <expr>\n")
+		fmt.Fprintf(os.Stderr, "  read data from files/stdin and evaluate an expresion\n")
+		fmt.Fprintf(os.Stderr, "    comp -f <files> <expr>\n")
 		fmt.Fprintf(os.Stderr, "  start a server with the specified files\n")
-		fmt.Fprintf(os.Stderr, "    comp -l <host:port> -f <files>\n\n")
+		fmt.Fprintf(os.Stderr, "    comp -f <files> -l <host:port>\n\n")
 		fmt.Fprintf(os.Stderr, "examples:\n")
-		fmt.Fprintf(os.Stderr, "  cat file.json | comp -t json '[ i | i <- in, i.name =~ \"hello\" ]'\n")
-		fmt.Fprintf(os.Stderr, "  comp -l :9090 -f file1.json,file2.csv\n\n")
+		fmt.Fprintf(os.Stderr, "  cat file.json | comp -f @json '[ i | i <- in, i.name =~ \"hello\" ]'\n")
+		fmt.Fprintf(os.Stderr, "  comp -f file1.json,file2.csv '[ {i, j} | i <- file1, j <- file2, i.id == j.id]'\n")
+		fmt.Fprintf(os.Stderr, "  comp -f file1.txt,file2.xml -l :9090\n\n")
 		fmt.Fprintf(os.Stderr, "flags:\n")
 		flag.PrintDefaults()
 	}
 
-	bind := flag.String("l", "", "start a server listening on the specified address (host:port)")
-	data := flag.String("f", "", "comma separated list of data files (.json, .xml, .csv, .txt)")
-	ctype := flag.String("t", "", "content type of stdin (json, xml, csv, txt)")
+	bind := flag.String("l", "", "start a server listening on the specified host:port")
+	files := flag.String("f", "", "comma separated list of files (@json @csv @txt @xml for stdin types)")
 	cores := flag.Int("c", runtime.NumCPU(), "how many cores to use for processing")
 	flag.Parse()
 
@@ -101,11 +84,11 @@ func main() {
 		args := flag.Args()
 		if len(args) != 1 {
 			flag.Usage()
-		} else if err := Command(args[0], *ctype); err != nil {
+		} else if err := Command(args[0], *files); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 		}
 	} else {
-		log.Fatal(Server(*bind, *data, *cores, nil))
+		log.Fatal(Server(*bind, *files, *cores, nil))
 	}
 }
 

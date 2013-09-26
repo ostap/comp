@@ -396,7 +396,7 @@ func (e *ParseError) Error() string {
 		return e.Message
 	}
 
-	return "<nil>"
+	return "<ParseError:nil>"
 }
 
 func NewError(line, column int, msg string, args ...interface{}) *ParseError {

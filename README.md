@@ -11,17 +11,18 @@ mechanism based on [list comprehensions][0].
     $ comp '[i * j | i <- [1, 2, 3], j <- [10, 20]]'
     [ 10, 20, 20, 40, 30, 60 ]
 
-Query the standard input:
+Query files from the command line:
 
     $ curl https://api.github.com/repos/torvalds/linux/commits > commits.json
-    $ cat commits.json | comp -t json '[ i.commit.author.name | i <- in ]'
+    $ comp -f commits.json '[ i.commit.author.name | i <- commits ]'
+    $ cat commits.json | comp -f @json '[ i.commit.author.name | i <- in ]'
 
-Preload files and run queries from the web console `http://localhost:9090/console` or via HTTP:
+Preload files and run queries using curl or from the web console (`http://localhost:9090/console`):
 
-    $ comp -l :9090 -f commits.json,authors.csv
+    $ comp -f commits.json,authors.csv -l :9090
     $ curl -d '{"expr": "[ c | c <- contacts, c.zip == 8001]"}' http://localhost:9090/full
 
-### syntax overview
+#### Syntax Overview
 
 comp defines the following types:
   * scalar - `53`, `3.14`, `"hello"`, `true`
@@ -36,7 +37,7 @@ and the following operators:
   * `== != =~` - [not] equal, regular expression match
   * `&& ||` - logical and, logical or
 
-for example, the following expressions:
+For example, the following expressions:
 
     "2.14" + 1
     8 / 2
@@ -66,14 +67,14 @@ will produce:
     [1, 6]
     [10, 20, 20, 40, 30, 60]
 
-### build and test
+#### Build & Test
 
     $ cd comp && export GOPATH=$GOPATH:$(pwd)
     $ go tool yacc -o src/comp/y.go -p "comp_" src/comp/grammar.y
     $ go test comp
     $ go install comp
 
-### acknowledgements
+#### Acknowledgements
 
 comp language borrows ideas from other programming languages (Haskell,
 JavaScript and probably others), but its core - the application of

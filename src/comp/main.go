@@ -28,8 +28,11 @@ func Command(expr, files string) error {
 	}
 
 	res := prg.Run(new(Stack))
-	if err := res.Quote(os.Stdout, rt); err != nil {
-		return err
+	if res != nil {
+		if err := res.Quote(os.Stdout, rt); err != nil {
+			return err
+		}
+		fmt.Printf("\n")
 	}
 
 	return nil

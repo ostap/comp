@@ -67,6 +67,16 @@ will produce:
     [1, 6]
     [10, 20, 20, 40, 30, 60]
 
+The `$` symbol used in front of an iteration variable gets an index of the given interation:
+
+    [ i | i <- ["a", "b"], $i < 1 ]
+    [ {i, j} | i <- ["a", "b"], $i < 1, j <- [-1, -2], $j > 0 ]
+  
+will produce:
+
+    [ "a" ]
+    [ { "i": "a", "j": -2 } ]
+
 #### Build & Test
 
     $ cd comp && export GOPATH=$GOPATH:$(pwd)

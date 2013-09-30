@@ -1,4 +1,4 @@
-// Copyright (c) 2013 Ostap Cherkashin. You can use this source code
+// Copyright (c) 2013 Ostap Cherkashin, Julius Chrobak. You can use this source code
 // under the terms of the MIT License found in the LICENSE file.
 
 package main
@@ -32,14 +32,15 @@ type Loop struct {
 	inner    *Loop
 	resAddr  int
 	varAddr  int
+	iterAddr int
 	list     Expr
 	sel      []Expr
 	ret      Expr
 	parallel bool
 }
 
-func ForEach(lid int, varAddr int, list Expr, parallel bool) *Loop {
-	return &Loop{lid, nil, -1, varAddr, list, nil, BadExpr, parallel}
+func ForEach(lid int, varAddr, iterAddr int, list Expr, parallel bool) *Loop {
+	return &Loop{lid, nil, -1, varAddr, iterAddr, list, nil, BadExpr, parallel}
 }
 
 func (l *Loop) Code() []Op {
@@ -59,6 +60,7 @@ func (l *Loop) Code() []Op {
 	code = append(code, OpArg(loopJump))
 	code = append(code, OpArg(parallel))
 	code = append(code, OpLoop(l.lid))
+	code = append(code, OpStore(l.iterAddr))
 	code = append(code, OpStore(l.varAddr))
 
 	for i, s := range l.sel { // select(s)
@@ -85,8 +87,8 @@ func (l *Loop) Code() []Op {
 	return append(code, OpNext(l.lid))
 }
 
-func (l *Loop) Nest(lid int, varAddr int, list Expr, parallel bool) *Loop {
-	l.innermost().inner = &Loop{lid, nil, -1, varAddr, list, nil, BadExpr, parallel}
+func (l *Loop) Nest(lid int, varAddr, iterAddr int, list Expr, parallel bool) *Loop {
+	l.innermost().inner = &Loop{lid, nil, -1, varAddr, iterAddr, list, nil, BadExpr, parallel}
 	return l
 }
 
@@ -117,7 +119,7 @@ func (l *Loop) innermost() *Loop {
 func (l *Loop) codeLen(selPos int) int {
 	jump := 0
 	if selPos < 0 {
-		jump++ /* OpStore */
+		jump += 2 /* OpStore - iterAddr, varAddr */
 	}
 
 	for i := selPos + 1; i < len(l.sel); i++ {

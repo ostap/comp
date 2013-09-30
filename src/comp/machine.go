@@ -184,6 +184,7 @@ func (p *Program) Run(s *Stack) Value {
 
 						sc := s.Clone()
 						sc.Push(list[c])
+						sc.Push(Number(c))
 
 						go func(_p *Program, _s *Stack) {
 							ch <- _p.Run(_s)
@@ -209,6 +210,7 @@ func (p *Program) Run(s *Stack) Value {
 				} else {
 					p.loops[lid] = &iterator{1, 1, list}
 					s.Push(list[0])
+					s.Push(Number(0))
 				}
 			} else {
 				i += offset
@@ -219,6 +221,7 @@ func (p *Program) Run(s *Stack) Value {
 			loop := p.loops[op.Arg]
 			if loop.pos > -1 && loop.pos < len(loop.list) {
 				s.Push(loop.list[loop.pos])
+				s.Push(Number(loop.pos))
 				loop.pos += loop.step
 
 				i += offset

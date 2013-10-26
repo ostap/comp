@@ -106,13 +106,21 @@ func (s Store) Add(fileName string, r io.Reader) error {
 	s.types[name] = t
 	s.values[name] = v
 
-	switch v.(type) {
-	case List:
-		log.Printf("stored %v (recs %v)", name, len(v.(List)))
-	default:
-		log.Printf("stored %v (single object)", name)
-	}
 	return nil
+}
+
+func (s Store) PrintSymbols() {
+	log.Printf("available symbols:")
+	for n, v := range s.values {
+		info := fmt.Sprintf("  %v (%v", n, s.types[n].Name())
+		switch value := v.(type) {
+		case List:
+			info = fmt.Sprintf("%v, %v elements", info, len(value))
+		case Object:
+			info = fmt.Sprintf("%v, %v fields", info, len(value))
+		}
+		log.Printf("%v)", info)
+	}
 }
 
 func (s Store) Decls() *Decls {
@@ -384,7 +392,7 @@ func readBody(t ListType, fileName string, r *csv.Reader) List {
 		close(tuples)
 	}()
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(3 * time.Second)
 	list := make(List, 0)
 
 	count := 0
@@ -436,6 +444,5 @@ func processLine(id int, ot ObjectType, in chan line, out Body, ctl chan int) {
 		out <- obj
 	}
 
-	log.Printf("parser %d found %d numbers\n", id, count)
 	ctl <- 1
 }

@@ -12,6 +12,22 @@ import (
 	"runtime"
 )
 
+const usage = `comp [-f <files>] [-l <host:port>] [-c <cores>] [<expr>]
+
+read data from files/stdin and evaluate an expresion
+  comp -f <files> <expr>
+
+start a server with the specified files
+  comp -f <files> -l <host:port>
+
+examples
+  cat file.json | comp -f @json '[ i | i <- in, i.name =~ \"hello\" ]'
+  comp -f file1.json,file2.csv '[ {i, j} | i <- file1, j <- file2, i.id == j.id]'
+  comp -f file1.txt,file2.xml -l :9090
+
+flags
+`
+
 func Command(expr, files string) error {
 	log.SetOutput(os.Stderr)
 
@@ -46,6 +62,7 @@ func Server(bind, files string, cores int, init func(Store)) error {
 	if init != nil {
 		init(store)
 	}
+	store.PrintSymbols()
 
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -65,16 +82,7 @@ func Server(bind, files string, cores int, init func(Store)) error {
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage:\n")
-		fmt.Fprintf(os.Stderr, "  read data from files/stdin and evaluate an expresion\n")
-		fmt.Fprintf(os.Stderr, "    comp -f <files> <expr>\n")
-		fmt.Fprintf(os.Stderr, "  start a server with the specified files\n")
-		fmt.Fprintf(os.Stderr, "    comp -f <files> -l <host:port>\n\n")
-		fmt.Fprintf(os.Stderr, "examples:\n")
-		fmt.Fprintf(os.Stderr, "  cat file.json | comp -f @json '[ i | i <- in, i.name =~ \"hello\" ]'\n")
-		fmt.Fprintf(os.Stderr, "  comp -f file1.json,file2.csv '[ {i, j} | i <- file1, j <- file2, i.id == j.id]'\n")
-		fmt.Fprintf(os.Stderr, "  comp -f file1.txt,file2.xml -l :9090\n\n")
-		fmt.Fprintf(os.Stderr, "flags:\n")
+		fmt.Fprintf(os.Stderr, usage)
 		flag.PrintDefaults()
 	}
 

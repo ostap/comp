@@ -85,6 +85,21 @@ func ExampleNumbers() {
 	// 2
 }
 
+func ExampleStrings() {
+	run(`"hello"`)
+	run("`hello`")
+	run("`hello` ++ ` world`")
+	run("`hello` ++ 1")
+	run("2 ++ `hello`")
+
+	// Output:
+	// "hello"
+	// "hello"
+	// "hello world"
+	// "hello1"
+	// "2hello"
+}
+
 func ExampleComparisons() {
 	run("-2 < -1")
 	run("-1 < 0")
@@ -187,7 +202,7 @@ func ExampleComparisons() {
 	// 5
 }
 
-func ExampleEquality() {
+func ExampleEqualityNumbers() {
 	run("-1 == -1")
 	run("-1 != -1")
 	run("0 == 0")
@@ -195,33 +210,79 @@ func ExampleEquality() {
 	run("1 == 1")
 	run("1 != 1")
 
+	run("-1 != -2")
+	run("-1 == -2")
+
+	// Output:
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+}
+
+func ExampleEqualityStrings() {
 	run("`` == ``")
 	run("`` != ``")
 	run("`hello world` == `hello world`")
 	run("`hello world` != `hello world`")
 
-	run("-1 != -2")
-	run("-1 == -2")
 	run("`` != `hello world`")
 	run("`` == `hello world`")
 
-	// reflexivity
+	// Output:
+	// true
+	// false
+	// true
+	// false
+	// true
+	// false
+}
+
+func ExampleEqualityReflexivityNumbers() {
 	run("2 - 1 == 2 - 1")
 	run("2 - 1 != 2 - 1")
 
-	// symmetry
+	// Output:
+	// true
+	// false
+}
+
+func ExampleEqualitySymmetryNumbers() {
 	run("1 == 3 - 2")
 	run("1 != 3 - 2")
 	run("3 - 2 == 1")
 	run("3 - 2 != 1")
 
-	// symmetry with type coercions
+	// Output:
+	// true
+	// false
+	// true
+	// false
+}
+
+func ExampleEqualitySymmetryWithCoercions() {
 	run("1 == `1`")
 	run("1 != `1`")
 	run("`1` == 1")
 	run("`1` != 1")
 
-	// transitivity
+	run("0 == ``")
+	run("`` == 0")
+
+	// Output:
+	// true
+	// false
+	// true
+	// false
+	// false
+	// false
+}
+
+func ExampleEqualityTransitivityNumbers() {
 	run("2 - 1 == 3 - 2")
 	run("2 - 1 != 3 - 2")
 	run("3 - 2 == 4 - 3")
@@ -236,45 +297,6 @@ func ExampleEquality() {
 	// false
 	// true
 	// false
-	// true
-	// false
-	// true
-	// false
-	// true
-	// false
-	// true
-	// false
-	// true
-	// false
-	// true
-	// false
-	// true
-	// false
-	// true
-	// false
-	// true
-	// false
-	// true
-	// false
-	// true
-	// false
-	// true
-	// false
-}
-
-func ExampleStrings() {
-	run(`"hello"`)
-	run("`hello`")
-	run("`hello` ++ ` world`")
-	run("`hello` ++ 1")
-	run("2 ++ `hello`")
-
-	// Output:
-	// "hello"
-	// "hello"
-	// "hello world"
-	// "hello1"
-	// "2hello"
 }
 
 func ExampleRegexps() {

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -28,6 +29,16 @@ type Value interface {
 
 	Quote(w io.Writer, t Type) error
 	Equals(v Value) Bool
+}
+
+func marshal(w io.Writer, v interface{}) error {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(data)
+	return err
 }
 
 func (b Bool) Bool() Bool {
@@ -59,14 +70,7 @@ func (b Bool) Object() Object {
 }
 
 func (b Bool) Quote(w io.Writer, t Type) error {
-	var err error
-	if b {
-		_, err = io.WriteString(w, "true")
-	} else {
-		_, err = io.WriteString(w, "false")
-	}
-
-	return err
+	return marshal(w, bool(b))
 }
 
 func (b Bool) Equals(v Value) Bool {
@@ -98,14 +102,14 @@ func (n Number) Object() Object {
 }
 
 func (n Number) Quote(w io.Writer, t Type) error {
-	var err error
+	var v interface{}
 	if math.IsInf(float64(n), 0) || math.IsNaN(float64(n)) {
-		_, err = fmt.Fprintf(w, `"%v"`, n)
+		v = fmt.Sprintf(`%v`, n)
 	} else {
-		_, err = fmt.Fprintf(w, "%v", n)
+		v = float64(n)
 	}
 
-	return err
+	return marshal(w, v)
 }
 
 func (n Number) Equals(v Value) Bool {
@@ -134,8 +138,7 @@ func (s String) Object() Object {
 }
 
 func (s String) Quote(w io.Writer, t Type) error {
-	_, err := io.WriteString(w, strconv.Quote(string(s)))
-	return err
+	return marshal(w, string(s))
 }
 
 func (s String) Equals(v Value) Bool {

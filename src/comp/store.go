@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
@@ -35,6 +36,24 @@ type Stats struct {
 type line struct {
 	lineNo int
 	rec    []string
+}
+
+type LineReader interface {
+	Read() (rec []string, err error)
+}
+
+type TabLineReader struct {
+	reader *bufio.Reader
+}
+
+func (r *TabLineReader) Read() ([]string, error) {
+	b := r.reader
+	line, err := b.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
+
+	return strings.Split(line[:len(line)-1], "\t"), nil
 }
 
 var StatsFailed = Stats{-1, -1}
@@ -92,9 +111,9 @@ func (s Store) Add(fileName string, r io.Reader) error {
 	case ".xml":
 		t, v, err = readXML(r)
 	case ".csv":
-		t, v, err = readCSV(r, fileName, ',')
+		t, v, err = readText(csvReader(r), fileName)
 	case ".txt":
-		t, v, err = readCSV(r, fileName, '\t')
+		t, v, err = readText(tsvReader(r), fileName)
 	default:
 		err = fmt.Errorf("unknown content type %v (use one of json, xml, csv, txt)", path.Ext(fileName))
 	}
@@ -340,13 +359,21 @@ func readJSON(r io.Reader) (Type, Value, error) {
 	return traverse(nil, data)
 }
 
-func readCSV(in io.Reader, fileName string, delim rune) (Type, Value, error) {
+func csvReader(in io.Reader) LineReader {
 	r := csv.NewReader(in)
-	r.Comma = delim
+	r.Comma = ','
 	r.LazyQuotes = true
 	r.TrailingComma = true
 	r.FieldsPerRecord = -1
 
+	return r
+}
+
+func tsvReader(in io.Reader) LineReader {
+	return &TabLineReader{reader: bufio.NewReader(in)}
+}
+
+func readText(r LineReader, fileName string) (Type, Value, error) {
 	rec, err := r.Read()
 	if err != nil {
 		return nil, nil, err
@@ -362,7 +389,7 @@ func readCSV(in io.Reader, fileName string, delim rune) (Type, Value, error) {
 	return t, readBody(t, fileName, r), nil
 }
 
-func readBody(t ListType, fileName string, r *csv.Reader) List {
+func readBody(t ListType, fileName string, r LineReader) List {
 	lines := make(chan line, 1024)
 	go func() {
 		for lineNo := 0; ; lineNo++ {

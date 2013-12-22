@@ -28,8 +28,14 @@ examples
 flags
 `
 
-func Command(expr, files string) error {
+func setCores(cores int) {
+	log.Printf("running on %d core(s)", runtime.NumCPU())
+	log.Printf("adjusting runtime to run on %d cores (old value %d)", cores, runtime.GOMAXPROCS(cores))
+}
+
+func Command(expr, files string, cores int) error {
 	log.SetOutput(os.Stderr)
+	setCores(cores)
 
 	store, e := BuildStore(files)
 	if e != nil {
@@ -43,6 +49,7 @@ func Command(expr, files string) error {
 		return err
 	}
 
+	log.Printf("running the program")
 	res := prg.Run(new(Stack))
 	if res != nil {
 		if err := res.Quote(os.Stdout, rt); err != nil {
@@ -50,26 +57,19 @@ func Command(expr, files string) error {
 		}
 		fmt.Printf("\n")
 	}
+	log.Printf("done")
 
 	return nil
 }
 
 func Server(bind, files string, cores int, init func(Store)) error {
-	log.Printf("running on %d core(s)", runtime.NumCPU())
-	log.Printf("adjusting runtime to run on %d cores (old value %d)", cores, runtime.GOMAXPROCS(cores))
+	setCores(cores)
 
 	store, _ := BuildStore(files)
 	if init != nil {
 		init(store)
 	}
 	store.PrintSymbols()
-
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	log.Printf("garbage collecting (heap ~%vMB)", m.Alloc/1024/1024)
-	runtime.GC()
-	runtime.ReadMemStats(&m)
-	log.Printf("done (heap ~%vMB)", m.Alloc/1024/1024)
 
 	log.Printf("announcing %v /full /console /pprof", bind)
 
@@ -95,7 +95,7 @@ func main() {
 		args := flag.Args()
 		if len(args) != 1 {
 			flag.Usage()
-		} else if err := Command(args[0], *files); err != nil {
+		} else if err := Command(args[0], *files, *cores); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 		}
 	} else {

@@ -84,6 +84,13 @@ func BuildStore(files string) (Store, error) {
 		}
 	}
 
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	log.Printf("garbage collecting (heap ~%vMB)", m.Alloc/1024/1024)
+	runtime.GC()
+	runtime.ReadMemStats(&m)
+	log.Printf("done (heap ~%vMB)", m.Alloc/1024/1024)
+
 	return store, err
 }
 

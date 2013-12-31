@@ -65,7 +65,11 @@ func Command(expr, files string, cores int) error {
 func Server(bind, files string, cores int, init func(Store)) error {
 	setCores(cores)
 
-	store, _ := BuildStore(files)
+	store, e := BuildStore(files)
+	if e != nil {
+		return e
+	}
+
 	if init != nil {
 		init(store)
 	}

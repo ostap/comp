@@ -281,7 +281,7 @@ func traverse(h Type, v interface{}) (Type, Value, error) {
 		case nil:
 			head = make(ObjectType, len(elems))
 		default:
-			return nil, nil, fmt.Errorf("expected object, got %v (%v)", h.Name(), v)
+			return nil, nil, fmt.Errorf("expected %v, got object (%v)", h.Name(), v)
 		}
 
 		idx := 0
@@ -316,7 +316,7 @@ func traverse(h Type, v interface{}) (Type, Value, error) {
 		case nil:
 			head = ListType{}
 		default:
-			return nil, nil, fmt.Errorf("expected list, got %v (%v)", h.Name(), v)
+			return nil, nil, fmt.Errorf("expected %v, got list (%v)", h.Name(), v)
 		}
 
 		for idx, value := range elems {
@@ -335,21 +335,21 @@ func traverse(h Type, v interface{}) (Type, Value, error) {
 		case nil, ScalarType:
 			return ScalarType(0), Bool(v.(bool)), nil
 		default:
-			return nil, nil, fmt.Errorf("expected bool, got %v (%v)", h.Name(), v)
+			return nil, nil, fmt.Errorf("expected %v, got bool (%v)", h.Name(), v)
 		}
 	case float64:
 		switch h.(type) {
 		case nil, ScalarType:
 			return ScalarType(0), Number(v.(float64)), nil
 		default:
-			return nil, nil, fmt.Errorf("expected number, got %v (%v)", h.Name(), v)
+			return nil, nil, fmt.Errorf("expected %v, got number (%v)", h.Name(), v)
 		}
 	default:
 		switch h.(type) {
 		case nil, ScalarType:
 			return ScalarType(0), String(v.(string)), nil
 		default:
-			return nil, nil, fmt.Errorf("expected string, got %v (%v)", h.Name(), v)
+			return nil, nil, fmt.Errorf("expected %v, got string (%v)", h.Name(), v)
 		}
 	}
 }

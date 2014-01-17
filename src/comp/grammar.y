@@ -144,11 +144,8 @@ generator_list:
       IDENT generator expression
 	{
 		gDecls.Strict(true)
-		varAddr, err := gDecls.Declare($1, nil, TypeOfElem($3.Id))
-		if err != nil {
-			parseError("%v", err)
-		}
-		$$ = ForEach(gLID, varAddr, $3, $2)
+		varAddr, iterAddr := loop($1, $3)
+		$$ = ForEach(gLID, varAddr, iterAddr, $3, $2)
 		gLID++
 	}
     | generator_list ',' expression
@@ -157,11 +154,8 @@ generator_list:
 	}
     | generator_list ',' IDENT generator expression
 	{
-		varAddr, err := gDecls.Declare($3, nil, TypeOfElem($5.Id))
-		if err != nil {
-			parseError("%v", err)
-		}
-		$$ = $1.Nest(gLID, varAddr, $5, $4)
+		varAddr, iterAddr := loop($3, $5)
+		$$ = $1.Nest(gLID, varAddr, iterAddr, $5, $4)
 		gLID++
 	}
     ;
@@ -269,6 +263,12 @@ unary_expression:
     | '+' postfix_expression
 	{
 		$$ = $2.Unary(OpPos(), "+")
+		gDecls.SetType($$, ScalarType(0))
+	}
+    | '$' IDENT
+	{
+		addr := gDecls.UseIdent("$" + $2)
+		$$ = ExprLoad("$"+$2, addr)
 		gDecls.SetType($$, ScalarType(0))
 	}
     ;
@@ -384,6 +384,20 @@ expression:
     ;
 
 %%
+
+func loop(name string, expr Expr) (int, int) {
+	varAddr, err := gDecls.Declare(name, nil, TypeOfElem(expr.Id))
+	if err != nil {
+		parseError("%v", err)
+		return -1, -1
+	}
+	iterAddr, err := gDecls.Declare("$"+name, nil, ScalarType(0));
+	if err != nil {
+		parseError("%v", err)
+		return -1, -1
+	}
+	return varAddr, iterAddr
+}
 
 type ParseError struct {
 	Line    int    `json:"line"`

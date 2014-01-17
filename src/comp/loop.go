@@ -92,7 +92,7 @@ func (l *Loop) Nest(lid int, varAddr int, list Expr, parallel bool) *Loop {
 
 func (l *Loop) Select(expr Expr) *Loop {
 	i := l.innermost()
-	i.sel = append(l.sel, expr)
+	i.sel = append(i.sel, expr)
 	return l
 }
 

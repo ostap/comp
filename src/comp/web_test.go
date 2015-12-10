@@ -377,6 +377,8 @@ func ExampleComps() {
 	run("[i * j | i <- [1, 2, 3], trunc(i), j <- [10, 20]]")
 	run(`[ i["a"] | i <- [{a: "a"}, {"b"}, {"c"}]]`)
 	run(`[ i["\"a\""] | i <- [{"a"}, {"b"}, {"c"}]]`)
+	run(`[{g,c}|g <- [1], c <- [0], c-1 == 0 && c == 0]`)
+	run(`[{g,c}|g <- [1], c <- [0], c-1 == 0, c == 0]`)
 
 	// Output:
 	// [1,2,3]
@@ -391,6 +393,8 @@ func ExampleComps() {
 	// [10,20,20,40,30,60]
 	// ["a","b","c"]
 	// ["a","b","c"]
+	// null
+	// null
 }
 
 func ExampleFuncs() {

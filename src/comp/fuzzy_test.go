@@ -6,55 +6,63 @@ package main
 import "testing"
 
 func TestFuzzy(t *testing.T) {
-	if d := dist("", ""); d != 0 {
+	var f Fuzzy
+	if d := f.dist("", ""); d != 0 {
 		t.Errorf("failed (dist == %d)", d)
 	}
 
-	if d := dist("", "a"); d != 1 {
+	if d := f.dist("", "a"); d != 1 {
 		t.Errorf("failed (dist == %d)", d)
 	}
 
-	if d := dist("a", ""); d != 1 {
+	if d := f.dist("a", ""); d != 1 {
 		t.Errorf("failed (dist == %d)", d)
 	}
 
-	if d := dist("Hello World!", "Hello World!"); d != 0 {
+	if d := f.dist("Hello World!", "Hello World!"); d != 0 {
 		t.Errorf("failed (dist == %d)", d)
 	}
 
-	if d := dist("Hello", "hEELO"); d != 5 {
+	if d := f.dist("Hello", "hEELO"); d != 5 {
 		t.Errorf("failed (dist == %d)", d)
 	}
 
-	if d := dist("Zürich", "Zurich"); d != 1 {
+	if d := f.dist("Zürich", "Zurich"); d != 1 {
 		t.Errorf("failed (dist == %d)", d)
 	}
 
-	if r := Fuzzy("", ""); r != 1 {
+	if r := f.Compare("", ""); r != 1 {
 		t.Errorf("failed (fuzzy == %v)", r)
 	}
 
-	if r := Fuzzy("", "a"); r != 0 {
+	if r := f.Compare("", "a"); r != 0 {
 		t.Errorf("failed (fuzzy == %v)", r)
 	}
 
-	if r := Fuzzy("a", ""); r != 0 {
+	if r := f.Compare("a", ""); r != 0 {
 		t.Errorf("failed (fuzzy == %v)", r)
 	}
 
-	if r := Fuzzy("Hello World!", "Hello World!"); r != 1 {
+	if r := f.Compare("Hello World!", "Hello World!"); r != 1 {
 		t.Errorf("failed (fuzzy == %v)", r)
 	}
 
-	if r := Fuzzy("Hello World!", "Hello World"); r == 0 {
+	if r := f.Compare("Hello World!", "Hello World"); r == 0 {
 		t.Errorf("failed (fuzzy == %v)", r)
 	}
 
-	if r := Fuzzy("Hello World!", "Hello wORLD?"); r != 0.5 {
+	if r := f.Compare("Hello World!", "Hello wORLD?"); r != 0.5 {
 		t.Errorf("failed (fuzzy == %v)", r)
 	}
 
-	if r := Fuzzy("Zürich", "Zurich"); r != 0.8333333333333334 {
+	if r := f.Compare("Zürich", "Zurich"); r != 0.8333333333333334 {
 		t.Errorf("failed (fuzzy == %v)", r)
+	}
+}
+
+func BenchmarkFuzzyBasic(b *testing.B) {
+	var f Fuzzy
+	for i := 0; i < b.N; i++ {
+		f.Compare("Hello World!", "Hello wORLD?")
 	}
 }

@@ -234,7 +234,8 @@ func (p *Program) Run(s *Stack) Value {
 			val := p.regexps[op.Arg].MatchString(str)
 			s.PushBool(val)
 		case opCall:
-			p.funcs[op.Arg].Eval(s)
+			fn := p.funcs[op.Arg]
+			fn.Eval(fn.State, s)
 		default:
 			msg := fmt.Sprintf("unknown operation %v", op)
 			panic(msg)
@@ -269,6 +270,9 @@ func (p *Program) Clone(from, to int) *Program {
 		res.regexps[i] = regexp.MustCompile(re.String())
 	}
 	copy(res.funcs, p.funcs)
+	for i, fn := range p.funcs {
+		res.funcs[i].State = fn.InitState()
+	}
 
 	return res
 }

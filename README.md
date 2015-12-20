@@ -1,3 +1,5 @@
+#### Introduction
+
 comp is a tool for querying information from files. Its main goal is
 to provide a unified interface to the variety of data representations found
 in public data sets. To achieve this goal comp introduces a small query
@@ -69,10 +71,10 @@ will produce:
 
 #### Build & Test
 
-    $ cd comp && export GOPATH=$GOPATH:$(pwd)
-    $ go tool yacc -o src/comp/y.go -p "comp_" src/comp/grammar.y
-    $ go test comp
-    $ go install comp
+    $ go tool yacc -o y.go -p "comp_" grammar.y
+    $ go test *.go
+    $ go build -o comp *.go
+    $ ./comp
 
 #### Acknowledgements
 

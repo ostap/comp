@@ -72,8 +72,8 @@ will produce:
 #### Build & Test
 
     $ go tool yacc -o y.go -p "comp_" grammar.y
-    $ go test *.go
-    $ go build -o comp *.go
+    $ go test .
+    $ go build -o comp .
     $ ./comp
 
 #### Acknowledgements

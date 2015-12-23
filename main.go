@@ -6,40 +6,47 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
-	"net/http"
 	"os"
-	"runtime"
+	"strings"
 )
 
-const usage = `comp [-f <files>] [-l <host:port>] [-c <cores>] [<expr>]
-
-read data from files/stdin and evaluate an expresion
-  comp -f <files> <expr>
-
-start a server with the specified files
-  comp -f <files> -l <host:port>
+const usage = `comp [-f <files>] <expr>
 
 examples
-  cat file.json | comp -f @json '[ i | i <- in, i.name =~ \"hello\" ]'
-  comp -f file1.json,file2.csv '[ {i, j} | i <- file1, j <- file2, i.id == j.id]'
-  comp -f file1.txt,file2.xml -l :9090
+  cat file.json | comp -f @json '[ i | i <- in, i.name =~ \"hello\" ]'
+  comp -f file1.json,file2.csv '[ {i, j} | i <- file1, j <- file2, i.id == j.id ]'
 
 flags
 `
 
-func setCores(cores int) {
-	log.Printf("running on %d core(s)", runtime.NumCPU())
-	log.Printf("adjusting runtime to run on %d cores (old value %d)", cores, runtime.GOMAXPROCS(cores))
+func openFiles(files string) (map[string]io.Reader, error) {
+	res := make(map[string]io.Reader)
+	if files != "" {
+		for _, f := range strings.Split(files, ",") {
+			if f[0] == '@' {
+				f = fmt.Sprintf("in.%v", f[1:])
+				res[f] = os.Stdin
+			} else {
+				r, err := os.Open(f)
+				if err != nil {
+					return nil, err
+				}
+				res[f] = r
+			}
+		}
+	}
+
+	return res, nil
 }
 
-func Command(expr, files string, cores int) error {
-	log.SetOutput(os.Stderr)
-	setCores(cores)
-
-	store, e := BuildStore(files)
-	if e != nil {
-		return e
+func Run(expr string, inputs map[string]io.Reader, output io.Writer) error {
+	store := Store{make(map[string]Type), make(map[string]Value)}
+	for k, v := range inputs {
+		if err := store.Add(k, v); err != nil {
+			return err
+		}
 	}
 
 	decls := store.Decls()
@@ -49,35 +56,15 @@ func Command(expr, files string, cores int) error {
 		return err
 	}
 
-	log.Printf("running the program")
 	res := prg.Run(new(Stack))
 	if res != nil {
-		if err := res.Quote(os.Stdout, rt); err != nil {
+		if err := res.Quote(output, rt); err != nil {
 			return err
 		}
 		fmt.Printf("\n")
 	}
-	log.Printf("done")
 
 	return nil
-}
-
-func Server(bind, files string, cores int, init func(Store)) error {
-	setCores(cores)
-
-	store, _ := BuildStore(files)
-	if init != nil {
-		init(store)
-	}
-	store.PrintSymbols()
-
-	log.Printf("announcing %v /full /console /pprof", bind)
-
-	http.Handle("/full", FullQuery(store))
-	http.Handle("/console", Console(0))
-	http.Handle("/pprof/", http.StripPrefix("/pprof/", Profiler(0)))
-
-	return http.ListenAndServe(bind, nil)
 }
 
 func main() {
@@ -86,20 +73,22 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	bind := flag.String("l", "", "start a server listening on the specified host:port")
 	files := flag.String("f", "", "comma separated list of files (@json @csv @txt @xml for stdin types)")
-	cores := flag.Int("c", runtime.NumCPU(), "how many cores to use for processing")
 	flag.Parse()
 
-	if *bind == "" {
-		args := flag.Args()
-		if len(args) != 1 {
-			flag.Usage()
-		} else if err := Command(args[0], *files, *cores); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-		}
-	} else {
-		log.Fatal(Server(*bind, *files, *cores, nil))
+	args := flag.Args()
+	if len(args) != 1 {
+		flag.Usage()
+		return
+	}
+
+	inputs, err := openFiles(*files)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+	}
+
+	if err := Run(args[0], inputs, os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 	}
 }
 

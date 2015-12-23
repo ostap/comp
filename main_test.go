@@ -4,19 +4,10 @@
 package main
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"runtime"
-	"strconv"
+	"io"
 	"strings"
-)
-
-const (
-	Port = ":9090"
-	Addr = "http://localhost" + Port + "/full"
 )
 
 func ExampleBools() {
@@ -353,7 +344,7 @@ func ExampleObjects() {
 	// {"1":1}
 	// 1
 	// {"id":1,"name":"foo"}
-	// {"children":[2,3],"id":1}
+	// {"id":1,"children":[2,3]}
 	// 1
 	// 1
 	// "foo"
@@ -392,8 +383,8 @@ func ExampleComps() {
 	// [10,20,20,40,30,60]
 	// ["a","b","c"]
 	// ["a","b","c"]
-	// null
-	// null
+	//
+	//
 }
 
 func ExampleFuncs() {
@@ -434,52 +425,47 @@ func ExampleErrors() {
 	// duplicate attribute '3' in object literal
 }
 
-func ExampleArguments() {
-	args := make(map[string]interface{})
-	args["num"] = 1
-	args["str"] = "hello"
-	args["list"] = []int{1, 2, 3}
-	args["obj"] = map[string]interface{}{"id": 153, "name": "hello"}
+func ExampleJSON() {
+	json := `
+		{
+			"num": 1,
+			"str": "hello",
+			"list": [1, 2, 3],
+			"obj": {"id": 153, "name": "hello"}
+		}`
 
-	runWithArgs("1 + num", args)
-	runWithArgs("str ++ ` world`", args)
-	runWithArgs("[i | i <- list, i != 2]", args)
-	runWithArgs("obj.id", args)
-
-	delete(args, "expr")
-	runWithArgs("", args)
-	args["expr"] = 357
-	runWithArgs("", args)
+	runWithInputs("1 + in.num", "in.json", json)
+	runWithInputs("in.str ++ ` world`", "in.json", json)
+	runWithInputs("[i | i <- in.list, i != 2]", "in.json", json)
+	runWithInputs("in.obj.id", "in.json", json)
 
 	// Output:
 	// 2
 	// "hello world"
 	// [1,3]
 	// 153
-	// missing expr
-	// expr is not of type string
 }
 
-const xmlData = `
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- comment -->
-<name>xmlData</name>
-<items xmlns:m="https://mingle.io">
-    <m:item id="1">
-        <name>Just character data</name>
-    </m:item>
-    <m:item id="2">
-        <name>Second name</name>
-    </m:item>
-</items>`
-
 func ExampleXML() {
-	run(`xmlData.name`)
-	run(`xmlData.name["text()"]`)
-	run(`xmlData.items["@xmlns:m"]`)
-	run(`[ a.name | a <- xmlData.items["m:item"]]`)
-	run(`[ a.name["text()"] | a <- xmlData.items["m:item"]]`)
-	run(`[ a["@id"] | a <- xmlData.items["m:item"]]`)
+	const xml = `
+		<?xml version="1.0" encoding="UTF-8"?>
+		<!-- comment -->
+		<name>xmlData</name>
+		<items xmlns:m="https://mingle.io">
+		    <m:item id="1">
+			<name>Just character data</name>
+		    </m:item>
+		    <m:item id="2">
+			<name>Second name</name>
+		    </m:item>
+		</items>`
+
+	runWithInputs(`xmlData.name`, "xmlData.xml", xml)
+	runWithInputs(`xmlData.name["text()"]`, "xmlData.xml", xml)
+	runWithInputs(`xmlData.items["@xmlns:m"]`, "xmlData.xml", xml)
+	runWithInputs(`[ a.name | a <- xmlData.items["m:item"]]`, "xmlData.xml", xml)
+	runWithInputs(`[ a.name["text()"] | a <- xmlData.items["m:item"]]`, "xmlData.xml", xml)
+	runWithInputs(`[ a["@id"] | a <- xmlData.items["m:item"]]`, "xmlData.xml", xml)
 
 	// Output:
 	// {"text()":"xmlData"}
@@ -490,79 +476,22 @@ func ExampleXML() {
 	// [1,2]
 }
 
-func run(expr string) {
-	req := fmt.Sprintf(`{"expr": %v}`, strconv.Quote(expr))
-	_run(req)
-}
-
-func runWithArgs(expr string, args map[string]interface{}) {
-	if expr != "" {
-		args["expr"] = expr
-	}
-
-	req, err := json.Marshal(args)
-	if err != nil {
-		log.Fatalf("failed to marshal json: %v", err)
-		return
-	}
-
-	_run(string(req))
-}
-
-func _run(req string) {
-	resp, err := http.Post(Addr, "application/json", strings.NewReader(req))
-	if err != nil {
-		log.Fatalf("post failed: %v", err)
-		return
-	}
-
-	buf, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("failed to read response body: %v", err)
-		return
-	}
-
-	if resp.StatusCode == 200 {
-		// verfiy that we get a valid json response
-		var res struct {
-			Time   string      `json:"time"`
-			Result interface{} `json:"result"`
-		}
-		if err := json.Unmarshal(buf, &res); err != nil {
-			log.Fatalf("failed to unmarshal json: %v", err)
-			return
-		}
-
-		buf, err = json.Marshal(res.Result)
-		if err != nil {
-			log.Fatalf("failed to marshal json: %v", err)
-			return
-		}
-
-		fmt.Printf("%v\n", string(buf))
+func _run(expr string, inputs map[string]io.Reader) {
+	buf := new(bytes.Buffer)
+	if err := Run(expr, inputs, buf); err != nil {
+		fmt.Printf("%v\n", err)
 	} else {
-		var res struct {
-			Error  string `json:"error"`
-			Line   int    `json:"line"`
-			Column int    `json:"column"`
-		}
-		if err := json.Unmarshal(buf, &res); err != nil {
-			log.Fatalf("failed to unmarshal json: %v", err)
-			return
-		}
-
-		fmt.Printf("%v\n", res.Error)
+		fmt.Printf("%v", buf.String())
 	}
 }
 
-func addVars(store Store) {
-	store.Add("xmlData.xml", strings.NewReader(xmlData))
+func runWithInputs(expr, file, data string) {
+	inputs := make(map[string]io.Reader)
+	inputs[file] = strings.NewReader(data)
+
+	_run(expr, inputs)
 }
 
-func init() {
-	go func() {
-		if err := Server(Port, "", runtime.NumCPU(), addVars); err != nil {
-			log.Fatalf("failed to start comp: %v", err)
-		}
-	}()
+func run(expr string) {
+	_run(expr, nil)
 }

@@ -12,7 +12,6 @@ import (
 	"io"
 	"log"
 	"math"
-	"os"
 	"path"
 	"regexp"
 	"runtime"
@@ -54,44 +53,6 @@ func (r *TabLineReader) Read() ([]string, error) {
 	}
 
 	return strings.Split(line[:len(line)-1], "\t"), nil
-}
-
-var StatsFailed = Stats{-1, -1}
-
-func BuildStore(files string) (Store, error) {
-	var err error
-	store := Store{make(map[string]Type), make(map[string]Value)}
-	if files != "" {
-		for _, fileName := range strings.Split(files, ",") {
-			var file *os.File
-			if fileName[0] == '@' {
-				fileName = fmt.Sprintf("in.%v", fileName[1:])
-				file = os.Stdin
-			} else {
-				f, e := os.Open(fileName)
-				if e != nil {
-					err = e
-					continue
-				}
-				defer f.Close()
-				file = f
-			}
-
-			if e := store.Add(fileName, file); e != nil {
-				err = e
-				continue
-			}
-		}
-	}
-
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	log.Printf("garbage collecting (heap ~%vMB)", m.Alloc/1024/1024)
-	runtime.GC()
-	runtime.ReadMemStats(&m)
-	log.Printf("done (heap ~%vMB)", m.Alloc/1024/1024)
-
-	return store, err
 }
 
 func (s Store) IsDef(name string) bool {

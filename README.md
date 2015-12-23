@@ -19,11 +19,6 @@ Query files from the command line:
     $ comp -f commits.json '[ i.commit.author.name | i <- commits ]'
     $ cat commits.json | comp -f @json '[ i.commit.author.name | i <- in ]'
 
-Preload files and run queries using curl or from the web console (`http://localhost:9090/console`):
-
-    $ comp -f commits.json,authors.csv -l :9090
-    $ curl -d '{"expr": "[ c | c <- contacts, c.zip == 8001]"}' http://localhost:9090/full
-
 #### Syntax Overview
 
 comp defines the following types:

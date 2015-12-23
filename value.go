@@ -166,7 +166,7 @@ func (l List) Object() Object {
 }
 
 func (l List) Quote(w io.Writer, t Type) error {
-	_, err := io.WriteString(w, "[ ")
+	_, err := io.WriteString(w, "[")
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func (l List) Quote(w io.Writer, t Type) error {
 
 	for i, v := range l {
 		if i != 0 {
-			_, err = io.WriteString(w, ", ")
+			_, err = io.WriteString(w, ",")
 			if err != nil {
 				return err
 			}
@@ -189,7 +189,7 @@ func (l List) Quote(w io.Writer, t Type) error {
 		}
 	}
 
-	_, err = io.WriteString(w, " ]")
+	_, err = io.WriteString(w, "]")
 	return err
 }
 
@@ -229,7 +229,7 @@ func (o Object) Object() Object {
 }
 
 func (o Object) Quote(w io.Writer, t Type) error {
-	_, err := io.WriteString(w, "{ ")
+	_, err := io.WriteString(w, "{")
 	if err != nil {
 		return err
 	}
@@ -241,13 +241,13 @@ func (o Object) Quote(w io.Writer, t Type) error {
 
 	for i, v := range o {
 		if i != 0 {
-			_, err = io.WriteString(w, ", ")
+			_, err = io.WriteString(w, ",")
 			if err != nil {
 				return err
 			}
 		}
 
-		_, err = fmt.Fprintf(w, `%v: `, strconv.Quote(ot[i].Name))
+		_, err = fmt.Fprintf(w, `%v:`, strconv.Quote(ot[i].Name))
 		if err != nil {
 			return err
 		}
@@ -257,7 +257,7 @@ func (o Object) Quote(w io.Writer, t Type) error {
 		}
 	}
 
-	_, err = io.WriteString(w, " }")
+	_, err = io.WriteString(w, "}")
 	return err
 }
 
